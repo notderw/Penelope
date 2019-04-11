@@ -1078,5 +1078,13 @@ class Mod(commands.Cog):
         args.search = max(0, min(2000, args.search)) # clamp from 0-2000
         await self.do_removal(ctx, args.search, predicate, before=args.before, after=args.after)
 
+    @commands.command()
+    @checks.is_mod()
+    async def roles(self, ctx):
+        embed = discord.Embed(title='Roles')
+        for role in ctx.guild.roles:
+            embed.add_field(name=f'{role.name}', value=f'{role.id}', inline=False)
+        await ctx.send(embed=embed)
+
 def setup(bot):
     bot.add_cog(Mod(bot))
