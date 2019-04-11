@@ -35,6 +35,10 @@ DB_DB = os.environ.get("DB_DB")
 DB_USER = os.environ.get("DB_USER")
 DB_PASSWORD = os.environ.get("DB_PASSWORD")
 
+# STATS
+STATS_ID = os.environ.get("STATS_ID")
+STATS_TOKEN = os.environ.get("STATS_TOKEN")
+
 loop = asyncio.get_event_loop()
 
 log = logging.getLogger()
@@ -149,8 +153,7 @@ class Peneolope(commands.AutoShardedBot):
 
     @property
     def stats_webhook(self):
-        wh_id, wh_token = self.config.stat_webhook
-        hook = discord.Webhook.partial(id=wh_id, token=wh_token, adapter=discord.AsyncWebhookAdapter(self.session))
+        hook = discord.Webhook.partial(id=STATS_ID, token=STATS_TOKEN, adapter=discord.AsyncWebhookAdapter(self.session))
         return hook
 
     def log_spammer(self, ctx, message, retry_after, *, autoblock=False):
