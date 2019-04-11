@@ -51,7 +51,8 @@ Hello human.
 initial_extensions = (
     'cogs.meta',
     'cogs.admin',
-    'cogs.mod'
+    'cogs.mod',
+    'cogs.reddiscord'
 )
 
 async def _prefix_callable(bot, msg):
@@ -215,7 +216,7 @@ class Peneolope(commands.AutoShardedBot):
     async def close(self):
         await super().close()
         await self.session.close()
-        await self.mongo.close()
+        self.mongo.close()
         self.redis.close()
         await self.redis.wait_closed()
 
