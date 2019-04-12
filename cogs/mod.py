@@ -1081,9 +1081,9 @@ class Mod(commands.Cog):
     @commands.command()
     @checks.is_mod()
     async def roles(self, ctx):
-        embed = discord.Embed(title='Roles')
+        embed = discord.Embed(title='Roles', colour=0x29B6F6)
         for role in ctx.guild.roles:
-            embed.add_field(name=f'{role.name}', value=f'{role.id}', inline=False)
+            embed.add_field(name=f'{role.name}', value=f'{len(role.members)} members\nID: `{role.id}`')
         await ctx.send(embed=embed)
 
 def setup(bot):
