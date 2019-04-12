@@ -62,10 +62,11 @@ async def _prefix_callable(bot, msg):
         base.append('!')
         base.append('?')
     else:
-        prefixes = await bot.redis.hget("penelope_prefixes", msg.guild.id)
-
-        if prefixes:
-            prefixes = json.loads(prefixes)
+        if await bot.redis.hexists("penelope_prefixes", msg.guild.id):
+            try:
+                prefixes = json.loads(await bot.redis.hget("penelope_prefixes", msg.guild.id))
+            except ValueError:
+                prefixes = []
         else:
             prefixes = ['?', '!']
 
@@ -122,10 +123,11 @@ class Peneolope(commands.AutoShardedBot):
         return local_inject(self, proxy_msg)
 
     async def get_raw_guild_prefixes(self, guild_id):
-        prefixes = await self.redis.hget("penelope_prefixes", guild_id)
-
-        if prefixes:
-            return json.loads(prefixes)
+        if await self.redis.hexists("penelope_prefixes", guild_id):
+            try:
+                return json.loads(await self.redis.hget("penelope_prefixes", guild_id))
+            except ValueError:
+                return []
         else:
             return ['?', '!']
 
