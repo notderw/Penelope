@@ -11,6 +11,7 @@ import datetime
 import asyncio
 import argparse, shlex
 import logging
+import typing
 
 log = logging.getLogger(__name__)
 
@@ -1079,12 +1080,28 @@ class Mod(commands.Cog):
         await self.do_removal(ctx, args.search, predicate, before=args.before, after=args.after)
 
     @commands.command()
+    @commands.guild_only()
     @checks.is_mod()
-    async def roles(self, ctx):
-        embed = discord.Embed(title='Roles', colour=0x29B6F6)
-        for role in ctx.guild.roles:
-            embed.add_field(name=f'{role.name}', value=f'{len(role.members)} members\nID: `{role.id}`')
-        await ctx.send(embed=embed)
+    async def role(self, ctx, *, role: typing.Optional[discord.Role]):
+        """
+        Displays role information, or list of roles
+        """
+        if role:
+            embed = discord.Embed(title=role.name, description=f'{len(role.members)} members', colour=role.colour)
+            embed.add_field(name="ID", value=f'`{role.id}`')
+            embed.add_field(name="Color", value=f'`{role.colour}`')
+            embed.add_field(name="Display Separately", value=f'{role.hoist}')
+            embed.add_field(name="Position", value=f'{role.position}')
+            embed.add_field(name="Managed", value=f'{role.managed}')
+            embed.add_field(name="Mentionable", value=f'{role.mentionable}')
+            embed.add_field(name="Permissions", value=f'{", ".join([k for k, v in iter(role.permissions) if v])}')
+            await ctx.send(embed=embed)
+
+        else:
+            embed = discord.Embed(title='Roles', description=f'{len(ctx.guild.roles)} total', colour=0x29B6F6)
+            for role in ctx.guild.roles:
+                embed.add_field(name=f'{role.name}', value=f'{len(role.members)} members\nID: `{role.id}`')
+            await ctx.send(embed=embed)
 
 def setup(bot):
     bot.add_cog(Mod(bot))
