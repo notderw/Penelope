@@ -35,7 +35,7 @@ class Reddiscord(commands.Cog):
         data = await self.db.users.find_one({"discord.id": str(member.id)})
 
         if(data and data.get("verified")):
-            await set_verified(member.id)
+            await self.set_verified(member.id)
 
     @commands.Cog.listener()
     async def on_member_ban(self, guild, user):
@@ -101,9 +101,9 @@ class Reddiscord(commands.Cog):
             self._task = bot.loop.create_task(self.monitor_db())
 
     async def set_verified(self, member_id):
-        server = self.bot.get_guild(GUILD) # Get serer object from ID
-        role = discord.utils.get(server.roles, id=VERIFIED_ROLE) # Get role object of verified role by ID
-        member = server.get_member(member_id) # Get member object by discord user ID
+        guild = self.bot.get_guild(GUILD) # Get serer object from ID
+        role = discord.utils.get(guild.roles, id=VERIFIED_ROLE) # Get role object of verified role by ID
+        member = guild.get_member(member_id) # Get member object by discord user ID
 
         if member: # Someone might verify before they join the server idk
             try:
