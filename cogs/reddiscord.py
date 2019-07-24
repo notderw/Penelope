@@ -19,10 +19,10 @@ class Reddiscord(commands.Cog):
         self.bot = bot
         self.db = bot.mongo.reddiscord
 
-        self._monitor_task = bot.loop.create_task(self.monitor_db())
+        self._task = bot.loop.create_task(self.monitor_db())
 
     def cog_unload(self):
-        self._monitor_task.cancel()
+        self._task.cancel()
 
     @commands.Cog.listener()
     @checks.is_in_guilds(GUILD)
@@ -47,6 +47,7 @@ class Reddiscord(commands.Cog):
 
         await self.db.users.find_one_and_update({"discord.id": user.id}, {"$set": {"banned": False}})
     async def monitor_db(self):
+        await self.bot.wait_until_ready()
         #First we check the queue for any old additions if this garbage was down
         backlog = await self.db.queue.find({}).to_list(None)
         if(backlog):
@@ -81,7 +82,11 @@ class Reddiscord(commands.Cog):
             print("Monitoring Task Killed")
 
         except Exception as e:
-            log.error(f'Error in Monitoring Task: {e}')
+
+            try:
+                _stream.close()
+            except:
+                pass
 
             wh = self.bot.stats_webhook
             embed = discord.Embed(title='Reddiscord', colour=0xE53935)
@@ -89,11 +94,8 @@ class Reddiscord(commands.Cog):
             embed.timestamp = datetime.datetime.utcnow()
             await wh.send(embed=embed)
 
-        finally:
-            try:
-                _stream.close()
-            except:
-                pass
+            self._task.cancel()
+            self._task = bot.loop.create_task(self.monitor_db())
 
     async def set_verified(self, member_id):
         server = self.bot.get_guild(GUILD) # Get serer object from ID
