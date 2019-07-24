@@ -38,12 +38,14 @@ class Reddiscord(commands.Cog):
         await self.db.users.find_one_and_update({"discord.id": user.id}, {"verified": False, "banned": True})
         log.info(f'BANNED {user.name + "#" + user.discriminator} ON {user.server.name}')
 
+        await self.db.users.find_one_and_update({"discord.id": user.id}, {"$set": {"verified": False, "banned": True}})
     @commands.Cog.listener()
     @checks.is_in_guilds(GUILD)
     async def on_member_unban(self, guild, user):
         await self.db.users.find_one_and_update({"discord.id": user.id}, {"banned": False})
         log.info(f'UNBANNED {user.name + "#" + user.discriminator} ON {guild.name}')
 
+        await self.db.users.find_one_and_update({"discord.id": user.id}, {"$set": {"banned": False}})
     async def monitor_db(self):
         #First we check the queue for any old additions if this garbage was down
         backlog = await self.db.queue.find({}).to_list(None)
