@@ -24,26 +24,29 @@ class Reddiscord(commands.Cog):
     def cog_unload(self):
         self._task.cancel()
 
+    def cog_check(self, ctx):
+        return ctx.guild and ctx.guild.id == GUILD
+
     @commands.Cog.listener()
-    @checks.is_in_guilds(GUILD)
     async def on_member_join(self, member):
+        if member.guild.id != GUILD:
+            return
+
         data = await self.db.users.find_one({"discord.id": str(member.id)})
 
         if(data and data.get("verified")):
             await set_verified(member.id)
 
     @commands.Cog.listener()
-    @checks.is_in_guilds(GUILD)
     async def on_member_ban(self, guild, user):
-        await self.db.users.find_one_and_update({"discord.id": user.id}, {"verified": False, "banned": True})
-        log.info(f'BANNED {user.name + "#" + user.discriminator} ON {user.server.name}')
+        if guild.id != GUILD:
+            return
 
         await self.db.users.find_one_and_update({"discord.id": user.id}, {"$set": {"verified": False, "banned": True}})
     @commands.Cog.listener()
-    @checks.is_in_guilds(GUILD)
     async def on_member_unban(self, guild, user):
-        await self.db.users.find_one_and_update({"discord.id": user.id}, {"banned": False})
-        log.info(f'UNBANNED {user.name + "#" + user.discriminator} ON {guild.name}')
+        if guild.id != GUILD:
+            return
 
         await self.db.users.find_one_and_update({"discord.id": user.id}, {"$set": {"banned": False}})
     async def monitor_db(self):
