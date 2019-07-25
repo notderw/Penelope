@@ -119,7 +119,21 @@ class Reddiscord(commands.Cog):
             else:
                 log.info(f'[Reddiscord] Verified {member.name}#{member.discriminator} in {guild.name}')
 
+    @commands.command(hidden=True)
+    @commands.has_role(185565928333770752) # Needs the Moderator role
+    async def verification(self, ctx, member: discord.Member):
+        user = await self.db.users.find_one({"discord.id": str(member.id)})
 
+        if not user or "reddit" not in user:
+            return await ctx.send("User has not verified")
+
+        e = discord.Embed(title=f'/u/{user["reddit"]["name"]}', url=f'https://reddit.com/u/{user["reddit"]["name"]}')
+
+        e.set_thumbnail(url=f"https://cdn.discordapp.com/avatars/{member.id}/{member.avatar}.jpg?size=32")
+        e.set_footer(text=f'Verified at {datetime.datetime.fromtimestamp(user["verified_at"]).strftime("%H:%M, %a %b %d")}')
+        e.colour = member.colour
+
+        await ctx.send(embed=e)
 
 def setup(bot):
     bot.add_cog(Reddiscord(bot))
