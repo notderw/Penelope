@@ -57,14 +57,14 @@ class Reddiscord(commands.Cog):
         await self.bot.wait_until_ready()
         #First we check the queue for any old additions if this garbage was down
         backlog = await self.db.queue.find({}).to_list(None)
-        if(backlog):
-            log.debug('[Reddiscord] Catching up, one sec')
+        if backlog:
+            print('[Reddiscord] Catching up, one sec')
 
             for item in backlog:
                 user = await self.db.users.find_one({"_id": item["ref"]})
 
                 if user.get("verified"):
-                    await self.set_verified(user['discord']['id'])
+                    await self.set_verified(int(user['discord']['id']))
 
                 else:
                     log.warning(f'[Reddiscord] Weird, {item["ref"]} was in the queue but is not verified.')
