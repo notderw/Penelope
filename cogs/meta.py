@@ -9,6 +9,7 @@ import copy
 import unicodedata
 import inspect
 import itertools
+import typing
 
 class Prefix(commands.Converter):
     async def convert(self, ctx, argument):
@@ -479,8 +480,9 @@ class Meta(commands.Cog):
 
     @commands.command(rest_is_raw=True, hidden=True)
     @commands.is_owner()
-    async def echo(self, ctx, *, content):
-        await ctx.send(content)
+    async def echo(self, ctx, channel: typing.Optional[typing.Union[discord.TextChannel, discord.User]], *, content):
+        dest = channel if channel else ctx
+        await dest.send(content)
 
     @commands.command(hidden=True)
     async def cud(self, ctx):
