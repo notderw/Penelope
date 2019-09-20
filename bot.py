@@ -68,7 +68,7 @@ async def _prefix_callable(bot, msg):
             except ValueError:
                 prefixes = []
         else:
-            prefixes = ['?', '!']
+            prefixes = []
 
         base.extend(prefixes)
     return base
@@ -129,7 +129,7 @@ class Peneolope(commands.AutoShardedBot):
             except ValueError:
                 return []
         else:
-            return ['?', '!']
+            return []
 
     async def set_guild_prefixes(self, guild, prefixes):
         if len(prefixes) == 0:
