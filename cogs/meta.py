@@ -494,5 +494,11 @@ class Meta(commands.Cog):
 
         await ctx.send('go')
 
+    @commands.command()
+    async def avatar(self, ctx, user: discord.User = None):
+        """shows a users avatar"""
+        u = user if user else ctx.author
+        await ctx.send(u.avatar_url_as(static_format='png', size=4096))
+
 def setup(bot):
     bot.add_cog(Meta(bot))
