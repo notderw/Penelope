@@ -151,9 +151,6 @@ class Peneolope(commands.AutoShardedBot):
 
             print(f'Ready: {self.user} (ID: {self.user.id})')
 
-    async def on_resumed(self):
-        print('resumed...')
-
     @property
     def stats_webhook(self):
         hook = discord.Webhook.partial(id=STATS_ID, token=STATS_TOKEN, adapter=discord.AsyncWebhookAdapter(self.session))
