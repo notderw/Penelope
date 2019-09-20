@@ -1,4 +1,4 @@
-from discord.ext import commands
+from discord.ext import commands, tasks
 from .utils import checks, formats
 from .utils.paginator import Pages
 import discord
@@ -10,6 +10,7 @@ import unicodedata
 import inspect
 import itertools
 import typing
+import random
 
 class Prefix(commands.Converter):
     async def convert(self, ctx, argument):
@@ -185,6 +186,41 @@ class PaginatedHelpCommand(commands.HelpCommand):
 
         await pages.paginate()
 
+class Activities:
+    def __init__(self, bot):
+        self.bot = bot
+
+    def default(self):
+        return discord.Activity(
+            type = discord.ActivityType.watching,
+            name = f"{len(list(self.bot.get_all_members())):,} humans in {len(list(self.bot.guilds)):,} guilds"
+        )
+
+    def world_burn(self):
+        return discord.Activity(
+            type = discord.ActivityType.watching,
+            name = "the world burn"
+        )
+
+    def baguette(self):
+        return discord.Activity(
+            type = discord.ActivityType.listening,
+            name = "baguette \N{BAGUETTE BREAD}"
+        )
+
+    def question(self):
+        return discord.Activity(
+            type = discord.ActivityType.playing,
+            name = "????-???????????? ??"
+        )
+
+    def apocalypse(self):
+        return discord.Activity(
+            type = discord.ActivityType.streaming,
+            name = "the apocalypse",
+            url = "https://twitch.tv//"
+        )
+
 class Meta(commands.Cog):
     """Commands for utilities related to Discord or the Bot itself."""
 
@@ -194,21 +230,24 @@ class Meta(commands.Cog):
         bot.help_command = PaginatedHelpCommand()
         bot.help_command.cog = self
 
+        self.update_status.start()
+
     def cog_unload(self):
         self.bot.help_command = self.old_help_command
+
+        self.update_status.cancel()
 
     async def cog_command_error(self, ctx, error):
         if isinstance(error, commands.BadArgument):
             await ctx.send(error)
 
-    @commands.Cog.listener()
-    async def on_ready(self):
-        activity = discord.Activity(
-            type = discord.ActivityType.watching,
-            name = "humans"
-        )
+    @tasks.loop(hours=1)
+    async def update_status(self):
+        await self.bot.wait_until_ready()
 
-        await self.bot.change_presence(status=discord.Status.dnd, activity=activity)
+        activities = Activities(self.bot)
+        activity = random.choice(list(name for name, func in activities.__class__.__dict__.items() if callable(func) and not name.startswith('_')))
+        await self.bot.change_presence(status=discord.Status.dnd, activity=getattr(activities, activity, None)())
 
     @commands.command()
     async def charinfo(self, ctx, *, characters: str):
