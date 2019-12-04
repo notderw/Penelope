@@ -18,7 +18,7 @@ class Meme(commands.Cog):
 
         e = discord.Embed(color = ctx.author.color)
         e.description = f'> {result}'
-        e.set_author(name=f'{ctx.author.nick}', icon_url=ctx.author.avatar_url)
+        e.set_author(name=f'{ctx.author.nick or ctx.author.name}', icon_url=ctx.author.avatar_url)
 
         await ctx.send(embed=e)
 
