@@ -221,6 +221,12 @@ class Activities:
             url = "https://twitch.tv//"
         )
 
+    def sample_text(self):
+        return discord.Activity(
+            type = discord.ActivityType.playing,
+            name = "s͍͇̥̟̗̰͓̋̌ͤ̏̋͂̎ḁ͙̣̝͎̏ͪ̎͋ͅm̖͗ͯ̀̊p̥͇̳̜̬̫͇̒͋̓l̪̪̃̒̄͐̓̆e͉̼̤̬͎͔̞ͯͅ ̰̦̻̭̑̄̈́ͤt̳̘̫ͧͤͬ͌́ͦe̗̳̤͖̞ͣ̏͊̒ͪͅx͕͕̔͆̃̍ͫ͆t̗̤ͭͣ̒͑͆͋ͬ͒͊"
+        )
+
 class Meta(commands.Cog):
     """Commands for utilities related to Discord or the Bot itself."""
 
