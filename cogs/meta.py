@@ -11,6 +11,8 @@ import inspect
 import itertools
 import typing
 import random
+import pygit2
+import platform
 
 class Prefix(commands.Converter):
     async def convert(self, ctx, argument):
@@ -544,6 +546,56 @@ class Meta(commands.Cog):
         """shows a users avatar"""
         u = user if user else ctx.author
         await ctx.send(u.avatar_url_as(static_format='png', size=4096))
+
+    @commands.command()
+    async def about(self, ctx):
+        "Shows information about the bot"
+
+        repo = pygit2.Repository('.git')
+        commit = repo.revparse_single(str(repo.head.target))
+
+        diff_stats = repo.diff("HEAD").stats
+
+        colors = [
+            discord.Color.red,
+            discord.Color.blue,
+            discord.Color.teal,
+            discord.Color.green,
+            discord.Color.purple,
+            discord.Color.magenta,
+            discord.Color.gold,
+            discord.Color.orange,
+        ]
+
+        e = discord.Embed()
+        e.color = random.choice(colors)()
+        e.title = f'{self.bot.user.name}#{self.bot.user.discriminator}'
+        e.url = repo.remotes["origin"].url
+        e.set_thumbnail(url=self.bot.user.avatar_url_as(static_format='png', size=64))
+        e.description = (
+            f'**AUTHOR** {self.bot.get_user(167726726451953664).mention}\n\n'
+
+            f'**PLATFORM**\n'
+            f'{platform.platform()}\n'
+            f'{platform.python_implementation()} {platform.python_version()} {platform.python_build()[1]}\n'
+            f'\n'
+
+            f'**GIT**\n'
+            f'{repo.remotes["origin"].url}\n'
+            f'Latest commit: `{str(repo.head.target)[:7]}` *{commit.message.strip()}*\n'
+            f'Committed by: {commit.author.name} @ {datetime.datetime.fromtimestamp(commit.commit_time)}\n'
+            f'\n'
+            f'{diff_stats.insertions} insertions, {diff_stats.deletions} deletions, {diff_stats.files_changed} files changed since last commit'
+        )
+        e.timestamp = datetime.datetime.now()
+        e.set_footer(text=self.bot.user.id)
+
+        await ctx.send(embed=e)
+
+    @commands.command(rest_is_raw=True, hidden=True)
+    @commands.is_owner()
+    async def echo(self, ctx, *, content):
+        await ctx.send(content)
 
 def setup(bot):
     bot.add_cog(Meta(bot))
