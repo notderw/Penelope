@@ -26,7 +26,18 @@ class Reddiscord(commands.Cog):
         self._task.cancel()
 
     def cog_check(self, ctx):
-        return ctx.guild and ctx.guild.id == GUILD
+        if not (ctx.guild and ctx.guild.id == GUILD):
+            return False
+
+        mod_roles = [
+            185565865033465856, # Administrator
+            185565928333770752 # Moderator
+        ]
+
+        if not [role for role in ctx.author.roles if role.id in mod_roles]:
+            return False
+
+        return True
 
     @commands.Cog.listener()
     async def on_member_join(self, member):
