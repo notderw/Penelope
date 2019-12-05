@@ -55,7 +55,7 @@ class Reddiscord(commands.Cog):
             return
 
         await self.db.users.find_one_and_update({"discord.id": user.id}, {"$set": {"verified": False, "banned": True}})
-        log.info(f'[Reddiscord] Banned {user.name + "#" + user.discriminator} ON {user.guild.name}')
+        print(f'[Reddiscord] Banned {user.name + "#" + user.discriminator} ON {guild.name}')
 
     @commands.Cog.listener()
     async def on_member_unban(self, guild, user):
@@ -63,14 +63,14 @@ class Reddiscord(commands.Cog):
             return
 
         await self.db.users.find_one_and_update({"discord.id": user.id}, {"$set": {"banned": False}})
-        log.info(f'[Reddiscord] Un-banned {user.name + "#" + user.discriminator} ON {guild.name}')
+        print(f'[Reddiscord] Un-banned {user.name + "#" + user.discriminator} ON {guild.name}')
 
     async def monitor_db(self):
         await self.bot.wait_until_ready()
         #First we check the queue for any old additions if this garbage was down
         backlog = await self.db.queue.find({}).to_list(None)
         if backlog:
-            print('[Reddiscord] Catching up, one sec')
+            print(f'[Reddiscord] Catching up, one sec ({len(backlog)} items)')
 
             for item in backlog:
                 user = await self.db.users.find_one({"_id": item["ref"]})
@@ -81,7 +81,7 @@ class Reddiscord(commands.Cog):
                 else:
                     log.warning(f'[Reddiscord] Weird, {item["ref"]} was in the queue but is not verified.')
 
-                    await self.db.queue.find_one_and_delete({"_id": item['_id']})
+                await self.db.queue.find_one_and_delete({"_id": item['_id']})
 
         # Monitor DB for changes
         try:
@@ -101,7 +101,7 @@ class Reddiscord(commands.Cog):
             print("[Reddiscord] Monitoring Task Killed")
 
         except Exception as e:
-            log.error(f'[Reddiscord] Error in Monitoring Task: {e}')
+            print(f'[Reddiscord] Error in Monitoring Task: {e}')
 
             try:
                 await _stream.close()
@@ -128,6 +128,8 @@ class Reddiscord(commands.Cog):
             except Exception as e:
                 log.error(f'[Reddiscord] Error asdding role for {member.name}#{member.discriminator} in {guild.name}: {e}') # Log an error if there was a problem
             else:
+                print(f'[Reddiscord] Verified {member.name}#{member.discriminator} in {guild.name}')
+
     @commands.group(name='reddiscord', invoke_without_command=True, aliases=['rdscrd', 'verification'])
     async def reddiscord(self, ctx, query: typing.Union[discord.User, str]):
         """Query a reddit or Discord user to see their verification status"""
