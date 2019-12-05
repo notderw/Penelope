@@ -2,6 +2,7 @@ import logging
 import asyncio
 import discord
 import datetime
+import typing
 from discord.ext import commands
 
 from .utils import checks
@@ -92,18 +93,17 @@ class Reddiscord(commands.Cog):
             log.error(f'[Reddiscord] Error in Monitoring Task: {e}')
 
             try:
-                _stream.close()
+                await _stream.close()
             except:
                 pass
 
-            wh = self.bot.stats_webhook
             embed = discord.Embed(title='Reddiscord', colour=0xE53935)
             embed.add_field(name='Error in Monitoring Task', value=f'{e}', inline=False)
             embed.timestamp = datetime.datetime.utcnow()
-            await wh.send(embed=embed)
+            await self.bot.stats_webhook.send(embed=embed)
 
             self._task.cancel()
-            self._task = bot.loop.create_task(self.monitor_db())
+            self._task = self.bot.loop.create_task(self.monitor_db())
 
     async def set_verified(self, member_id):
         guild = self.bot.get_guild(GUILD) # Get serer object from ID
@@ -117,23 +117,59 @@ class Reddiscord(commands.Cog):
             except Exception as e:
                 log.error(f'[Reddiscord] Error asdding role for {member.name}#{member.discriminator} in {guild.name}: {e}') # Log an error if there was a problem
             else:
-                log.info(f'[Reddiscord] Verified {member.name}#{member.discriminator} in {guild.name}')
+    @commands.group(name='reddiscord', invoke_without_command=True, aliases=['rdscrd', 'verification'])
+    async def reddiscord(self, ctx, query: typing.Union[discord.User, str]):
+        """Query a reddit or Discord user to see their verification status"""
+        print(type(query), query)
+        if isinstance(query, str) and query.startswith('/u/'):
+            await self.reddit(ctx, query)
 
-    @commands.command(hidden=True)
-    @commands.has_role(185565928333770752) # Needs the Moderator role
-    async def verification(self, ctx, member: discord.Member):
-        user = await self.db.users.find_one({"discord.id": str(member.id)})
+        elif isinstance(query, discord.User):
+            await self.discord(ctx, query)
 
-        if not user or "reddit" not in user:
-            return await ctx.send("User has not verified")
+    @reddiscord.command(name='reddit', aliases=['r'])
+    async def rr(self, ctx, *, ruser: str):
+        """Force query a reddit account"""
+        await self.reddit(ctx, ruser)
 
-        e = discord.Embed(title=f'/u/{user["reddit"]["name"]}', url=f'https://reddit.com/u/{user["reddit"]["name"]}')
+    @reddiscord.command(name='discord', aliases=['d'])
+    async def rd(self, ctx, *, duser: typing.Union[discord.User, str]):
+        """Force query a Discord account"""
+        await self.discord(ctx, duser)
 
-        e.set_thumbnail(url=f"https://cdn.discordapp.com/avatars/{member.id}/{member.avatar}.jpg?size=32")
-        e.set_footer(text=f'Verified at {datetime.datetime.fromtimestamp(user["verified_at"]).strftime("%H:%M, %a %b %d")}')
-        e.colour = member.colour
+    async def reddit(self, ctx, ruser):
+        data = await self.db.users.find_one({"reddit.name": { "$regex": ruser.replace("/u/", ""), "$options": "i"}})
+        await self.render(ctx, data)
+
+    async def discord(self, ctx, duser):
+        data = await self.db.users.find_one({"discord.id": str(duser.id) if isinstance(duser, discord.User) else duser})
+        await self.render(ctx, data)
+
+    async def render(self, ctx, data):
+        if not data or "reddit" not in data:
+            await ctx.send("User has not verified")
+            return
+
+        user = self.bot.get_user(int(data["discord"]["id"]))
+
+        e = discord.Embed(title=f'/u/{data["reddit"]["name"]}', url=f'https://reddit.com/u/{data["reddit"]["name"]}')
+
+        if user:
+            e.description = f'{user.mention}\n\n`{user.id}`'
+            e.set_thumbnail(url=f"https://cdn.discordapp.com/avatars/{user.id}/{user.avatar}.jpg?size=32")
+            e.set_footer(text=f'Verified at {datetime.datetime.fromtimestamp(data["verified_at"]).strftime("%H:%M, %a %b %d")}')
+            e.colour = 0x29B6F6
+
+        else:
+            e.description = f'User no longer exists (was `{data["discord"]["name"]}`)'
+            e.colour = 0xFF5722
+
+        if data.get('banned'):
+            e.description += '\n\n**User was banned**'
+            e.colour = 0xF44336
 
         await ctx.send(embed=e)
+
 
 def setup(bot):
     bot.add_cog(Reddiscord(bot))
