@@ -13,6 +13,7 @@ import typing
 import random
 import pygit2
 import platform
+from typing import List, Optional
 
 class Prefix(commands.Converter):
     async def convert(self, ctx, argument):
@@ -188,46 +189,66 @@ class PaginatedHelpCommand(commands.HelpCommand):
 
         await pages.paginate()
 
+
 class Activities:
     def __init__(self, bot):
         self.bot = bot
+        self._map = [name for name, func in self.__class__.__dict__.items() if callable(func) and not name.startswith('_')]
 
-    def default(self):
+    def __len__(self):
+        return len(self._map)
+
+    def __iter__(self):
+        return iter(self._map)
+
+    @property
+    def random(self):
+        return getattr(self, random.choice(list(self)), None)()
+
+    def default(self) -> discord.Activity:
         return discord.Activity(
             type = discord.ActivityType.watching,
             name = f"{len(list(self.bot.get_all_members())):,} humans in {len(list(self.bot.guilds)):,} guilds"
         )
 
-    def world_burn(self):
+    def world_burn(self) -> discord.Activity:
         return discord.Activity(
             type = discord.ActivityType.watching,
             name = "the world burn"
         )
 
-    def baguette(self):
+    def baguette(self) -> discord.Activity:
         return discord.Activity(
             type = discord.ActivityType.listening,
             name = "baguette \N{BAGUETTE BREAD}"
         )
 
-    def question(self):
+    def question(self) -> discord.Activity:
         return discord.Activity(
             type = discord.ActivityType.playing,
             name = "????-???????????? ??"
         )
 
-    def apocalypse(self):
+    def apocalypse(self) -> discord.Activity:
         return discord.Activity(
             type = discord.ActivityType.streaming,
             name = "the apocalypse",
             url = "https://twitch.tv//"
         )
 
-    def sample_text(self):
+    def sample_text(self) -> discord.Activity:
         return discord.Activity(
             type = discord.ActivityType.playing,
             name = "s͍͇̥̟̗̰͓̋̌ͤ̏̋͂̎ḁ͙̣̝͎̏ͪ̎͋ͅm̖͗ͯ̀̊p̥͇̳̜̬̫͇̒͋̓l̪̪̃̒̄͐̓̆e͉̼̤̬͎͔̞ͯͅ ̰̦̻̭̑̄̈́ͤt̳̘̫ͧͤͬ͌́ͦe̗̳̤͖̞ͣ̏͊̒ͪͅx͕͕̔͆̃̍ͫ͆t̗̤ͭͣ̒͑͆͋ͬ͒͊"
         )
+
+
+def activity_type(argument) -> discord.ActivityType:
+    try:
+        return discord.ActivityType[argument]
+    except Exception as e:
+        raise commands.BadArgument(f'Activity not valid: {e}')
+
 
 class Meta(commands.Cog):
     """Commands for utilities related to Discord or the Bot itself."""
@@ -238,24 +259,65 @@ class Meta(commands.Cog):
         bot.help_command = PaginatedHelpCommand()
         bot.help_command.cog = self
 
-        self.update_status.start()
+        self.activities = Activities(self.bot)
+        self.update_presence.start()
 
     def cog_unload(self):
         self.bot.help_command = self.old_help_command
 
-        self.update_status.cancel()
+        self.update_presence.cancel()
 
     async def cog_command_error(self, ctx, error):
         if isinstance(error, commands.BadArgument):
             await ctx.send(error)
 
     @tasks.loop(hours=1)
-    async def update_status(self):
+    async def update_presence(self):
         await self.bot.wait_until_ready()
+        await self.bot.change_presence(status=discord.Status.dnd, activity=self.activities.random)
 
-        activities = Activities(self.bot)
-        activity = random.choice(list(name for name, func in activities.__class__.__dict__.items() if callable(func) and not name.startswith('_')))
-        await self.bot.change_presence(status=discord.Status.dnd, activity=getattr(activities, activity, None)())
+    @commands.is_owner()
+    @commands.group(invoke_without_command=True)
+    async def presence(self, ctx, activity: str, random: Optional[bool] = False):
+        """Manages the bot's presence"""
+
+        self.update_presence.cancel()
+
+        if activity in list(self.activities):
+            await self.bot.change_presence(status=discord.Status.dnd, activity=getattr(self.activities, activity, None)())
+
+        else:
+            await ctx.send(f'{activity} is not a valid activity')
+
+    @presence.command()
+    async def random(self, ctx):
+        """Randomly select a presence every hour"""
+
+        self.update_presence.cancel()
+        self.update_presence.start()
+
+    @presence.command()
+    async def clear(self, ctx):
+        """Clear the current presence"""
+
+        self.update_presence.cancel()
+        await self.bot.change_presence(status=discord.Status.dnd)
+
+    @presence.command()
+    async def list(self, ctx):
+        """List premade presences"""
+
+        e = discord.Embed(color = ctx.me.color)
+        e.description = '\n'.join(list(self.activities))
+        e.set_footer(text=f'{len(self.activities)} activities')
+        await ctx.send(embed=e)
+
+    @presence.command()
+    async def set(self, ctx, status: discord.Status, type_: activity_type, name: str):
+        """Set a custom presence"""
+        self.update_presence.cancel()
+
+        await self.bot.change_presence(status = status, activity = discord.Activity(type = type_, name = name))
 
     @commands.command()
     async def charinfo(self, ctx, *, characters: str):
