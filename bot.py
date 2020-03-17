@@ -74,7 +74,7 @@ async def _prefix_callable(bot, msg):
         base.extend(prefixes)
     return base
 
-class Peneolope(commands.AutoShardedBot):
+class Penelope(commands.AutoShardedBot):
     def __init__(self):
         super().__init__(command_prefix=_prefix_callable, description=description,
                          pm_help=None, help_attrs=dict(hidden=True), fetch_offline_members=False)
@@ -244,7 +244,7 @@ class Peneolope(commands.AutoShardedBot):
                         fp.write(f'{x}\n')
 
 def run():
-    bot = Peneolope()
+    bot = Penelope()
 
     try:
         loop.run_until_complete(bot.init_mongo())
