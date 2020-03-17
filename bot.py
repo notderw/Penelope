@@ -81,8 +81,6 @@ class Penelope(commands.AutoShardedBot):
 
         self.client_id = CLIENT_ID
 
-        self.session = aiohttp.ClientSession(loop=self.loop)
-
         self._prev_events = deque(maxlen=10)
 
         # in case of even further spam, add a cooldown mapping
@@ -220,6 +218,9 @@ class Penelope(commands.AutoShardedBot):
         self.redis.close()
         await self.redis.wait_closed()
 
+    async def init_http(self):
+        self.session = aiohttp.ClientSession()
+
     async def init_mongo(self):
         self.mongo = motor.motor_asyncio.AsyncIOMotorClient(host=DB_HOST, port=int(DB_PORT), username=DB_USER, password=DB_PASSWORD, authMechanism='SCRAM-SHA-256')
         # motor doesnt attempt a connection until you try to do something
@@ -245,6 +246,8 @@ class Penelope(commands.AutoShardedBot):
 
 def run():
     bot = Penelope()
+
+    loop.run_until_complete(bot.init_http())
 
     try:
         loop.run_until_complete(bot.init_mongo())
