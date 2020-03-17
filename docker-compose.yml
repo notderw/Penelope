@@ -1,0 +1,38 @@
+# Docker containers used for development only.
+
+services:
+    redis:
+        container_name: penelope-redis
+        image: redis
+        ports:
+            - "6379:6379"
+        volumes:
+            - ./data/redis:/data
+        restart: always
+
+    mongo:
+        container_name: penelope-mongo
+        image: mongo:latest
+        ports:
+            - "27017:27017"
+        volumes:
+            - ./data/mongo:/data/db
+        environment:
+            MONGO_INITDB_ROOT_USERNAME: "${DB_USER}"
+            MONGO_INITDB_ROOT_PASSWORD: "${DB_PASSWORD}"
+        command: --replSet rs0
+
+    mongoclient:
+        container_name: penelope-mongoclient
+        image: mongo
+        depends_on:
+            - mongo
+        volumes:
+            - ./dev_scripts:/dev_scripts
+        environment:
+            MONGO_USERNAME: "${DB_USER}"
+            MONGO_PASSWORD: "${DB_PASSWORD}"
+        entrypoint:
+            - /dev_scripts/initiate_replica.sh
+
+version: "3"
