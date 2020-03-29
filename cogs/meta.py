@@ -643,7 +643,7 @@ class Meta(commands.Cog):
             f'\n'
 
             f'**GIT**\n'
-            f'{repo.remotes["origin"].url}\n'
+            f'{repo.remotes["origin"].url.replace(".git", "")}/tree/{repo.head.shorthand}\n'
             f'Latest commit: `{str(repo.head.target)[:7]}` *{commit.message.strip()}*\n'
             f'Committed by: {commit.author.name} @ {datetime.datetime.fromtimestamp(commit.commit_time)}\n'
             f'\n'

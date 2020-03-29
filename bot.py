@@ -8,13 +8,13 @@ import aiohttp
 
 from collections import Counter, deque
 
-import motor.motor_asyncio
+from  motor.motor_asyncio import AsyncIOMotorClient
 from pymongo.errors import ServerSelectionTimeoutError
 import aioredis
 
 import discord
 from discord.ext import commands
-from cogs.utils import checks, context
+from cogs.utils import context
 
 # from .cogs.util import Collection
 logging.getLogger('discord').setLevel(logging.INFO)
@@ -226,7 +226,7 @@ class Penelope(commands.AutoShardedBot):
         self.session = aiohttp.ClientSession()
 
     async def init_mongo(self):
-        self.mongo = motor.motor_asyncio.AsyncIOMotorClient(host=DB_HOST, port=int(DB_PORT), username=DB_USER, password=DB_PASSWORD, authMechanism='SCRAM-SHA-256')
+        self.mongo = AsyncIOMotorClient(host=DB_HOST, port=int(DB_PORT), username=DB_USER, password=DB_PASSWORD, authMechanism='SCRAM-SHA-256')
         # motor doesnt attempt a connection until you try to do something
         await self.mongo.admin.command("ismaster")
         print("Connected to mongo")
