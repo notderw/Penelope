@@ -211,6 +211,10 @@ class Penelope(commands.AutoShardedBot):
         if guild.id in await self.redis.smembers("penelope_blacklist"):
             await guild.leave()
 
+    async def guild_config(self, guild_id) -> dict:
+        doc = await self.mongo.penelope.guild_config.find_one({"id": guild_id})
+        return doc or {}
+
     async def close(self):
         await super().close()
         await self.session.close()

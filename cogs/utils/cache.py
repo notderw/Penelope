@@ -1,3 +1,6 @@
+# I stole this straight off https://github.com/Rapptz/RoboDanny/blob/rewrite/cogs/utils/cache.py
+# and didn't even need to modify it for mongoDB so its literally just stealing
+
 import inspect
 import asyncio
 import enum
