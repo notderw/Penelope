@@ -656,8 +656,10 @@ class Meta(commands.Cog):
 
     @commands.command(rest_is_raw=True, hidden=True)
     @commands.is_owner()
-    async def echo(self, ctx, *, content):
-        await ctx.send(content)
+    async def say(self, ctx, channel: Optional[discord.TextChannel] = None, *, content):
+        if not channel:
+            channel = ctx.channel
+        await channel.send(content)
 
 def setup(bot):
     bot.add_cog(Meta(bot))
