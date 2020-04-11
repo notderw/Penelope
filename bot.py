@@ -47,6 +47,7 @@ initial_extensions = (
     'cogs.mod',
     'cogs.reddiscord',
     'cogs.meme',
+    'cogs.log',
     'cogs.dm',
     'cogs.modqueue',
 )
