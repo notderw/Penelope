@@ -7,8 +7,7 @@ from discord.ext import commands
 
 from .utils import checks
 
-log = logging.getLogger('reddiscord')
-log.setLevel(logging.DEBUG)
+log = logging.getLogger('Penelope')
 
 GUILD = 185565668639244289
 VERIFIED_ROLE = 190693397856649216
@@ -55,7 +54,7 @@ class Reddiscord(commands.Cog):
             return
 
         await self.db.users.find_one_and_update({"discord.id": user.id}, {"$set": {"verified": False, "banned": True}})
-        print(f'[Reddiscord] Banned {user.name + "#" + user.discriminator} ON {guild.name}')
+        log.info(f'{self.__class__.__name__} - Banned {user.name + "#" + user.discriminator} ON {guild.name}')
 
     @commands.Cog.listener()
     async def on_member_unban(self, guild, user):
@@ -63,14 +62,14 @@ class Reddiscord(commands.Cog):
             return
 
         await self.db.users.find_one_and_update({"discord.id": user.id}, {"$set": {"banned": False}})
-        print(f'[Reddiscord] Un-banned {user.name + "#" + user.discriminator} ON {guild.name}')
+        log.info(f'{self.__class__.__name__} - Un-banned {user.name + "#" + user.discriminator} ON {guild.name}')
 
     async def monitor_db(self):
         await self.bot.wait_until_ready()
         #First we check the queue for any old additions if this garbage was down
         backlog = await self.db.queue.find({}).to_list(None)
         if backlog:
-            print(f'[Reddiscord] Catching up, one sec ({len(backlog)} items)')
+            log.info(f'{self.__class__.__name__} - Catching up, one sec ({len(backlog)} items)')
 
             for item in backlog:
                 user = await self.db.users.find_one({"_id": item["ref"]})
@@ -79,14 +78,14 @@ class Reddiscord(commands.Cog):
                     await self.set_verified(int(user['discord']['id']))
 
                 else:
-                    log.warning(f'[Reddiscord] Weird, {item["ref"]} was in the queue but is not verified.')
+                    log.warning(f'{self.__class__.__name__} - Weird, {item["ref"]} was in the queue but is not verified.')
 
                 await self.db.queue.find_one_and_delete({"_id": item['_id']})
 
         # Monitor DB for changes
         try:
             _stream = self.db.queue.watch()
-            print("[Reddiscord] Monitoring DB")
+            log.info(f'{self.__class__.__name__} - Monitoring DB')
             async for change in _stream:
                 if change["operationType"] == "insert":
                     user = await self.db.users.find_one({"_id": change["fullDocument"]["ref"]})
@@ -98,10 +97,10 @@ class Reddiscord(commands.Cog):
 
         # handle asyncio.Task.cancel
         except asyncio.CancelledError:
-            print("[Reddiscord] Monitoring Task Killed")
+            log.warning(f'{self.__class__.__name__} - Monitoring Task Killed')
 
         except Exception as e:
-            print(f'[Reddiscord] Error in Monitoring Task: {e}')
+            log.error(f'{self.__class__.__name__} - Error in Monitoring Task: {e}')
 
             try:
                 await _stream.close()
@@ -126,9 +125,9 @@ class Reddiscord(commands.Cog):
                 await member.add_roles(role) # Add user as verified
                 await member.send("Congratulations! You are now verified!") # Send the verified message
             except Exception as e:
-                log.error(f'[Reddiscord] Error asdding role for {member.name}#{member.discriminator} in {guild.name}: {e}') # Log an error if there was a problem
+                log.error(f'{self.__class__.__name__} - Error asdding role for {member.name}#{member.discriminator} in {guild.name}: {e}') # Log an error if there was a problem
             else:
-                print(f'[Reddiscord] Verified {member.name}#{member.discriminator} in {guild.name}')
+                log.info(f'{self.__class__.__name__} - Verified {member.name}#{member.discriminator} in {guild.name}')
 
     @commands.group(name='reddiscord', invoke_without_command=True, aliases=['rdscrd', 'verification'])
     async def reddiscord(self, ctx, query: typing.Union[discord.User, str]):
