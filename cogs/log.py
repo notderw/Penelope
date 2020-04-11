@@ -143,7 +143,7 @@ class Log(commands.Cog):
             if line.startswith('?'): # idk these are annoying
                 continue
 
-            e.description += line + '\n'
+            e.description += line.replace('```', '[code]') + '\n'
 
         e.description += "```"
         e.timestamp = after.edited_at or datetime.now()
