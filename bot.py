@@ -25,8 +25,7 @@ TOKEN = os.environ.get("TOKEN")
 CLIENT_ID = os.environ.get("CLIENT_ID")
 
 # REDIS
-REDIS_HOST = os.environ.get("REDIS_HOST")
-REDIS_PASSWORD = os.environ.get("REDIS_PASSWORD")
+REDIS_URI = os.environ.get("REDIS_URI")
 
 # DATABASE
 MONGO_URI = os.environ.get("MONGO_URI")
@@ -230,8 +229,7 @@ class Penelope(commands.AutoShardedBot):
         print("Connected to mongo")
 
     async def init_redis(self):
-        self.redis = await aioredis.create_redis_pool(REDIS_HOST, password=REDIS_PASSWORD, loop=loop, encoding="utf-8")
-        print("Connected to redis")
+        self.redis = await aioredis.create_redis_pool(REDIS_URI)
 
     def run(self):
         try:
