@@ -47,7 +47,7 @@ class Admin(commands.Cog):
             await ctx.send(f'{e.__class__.__name__}: {e}')
             traceback.print_exc()
         else:
-            await ctx.send('\N{OK HAND SIGN}')
+            await ctx.message.add_reaction('\N{OK HAND SIGN}')
 
     @commands.command(hidden=True)
     async def unload(self, ctx, *, module):
@@ -57,7 +57,7 @@ class Admin(commands.Cog):
         except commands.ExtensionError as e:
             await ctx.send(f'{e.__class__.__name__}: {e}')
         else:
-            await ctx.send('\N{OK HAND SIGN}')
+            await ctx.message.add_reaction('\N{OK HAND SIGN}')
 
     @commands.command(name='reload', hidden=True)
     async def _reload(self, ctx, *, module):
@@ -68,7 +68,7 @@ class Admin(commands.Cog):
             await ctx.send(f'{e.__class__.__name__}: {e}')
             traceback.print_exc()
         else:
-            await ctx.send('\N{OK HAND SIGN}')
+            await ctx.message.add_reaction('\N{OK HAND SIGN}')
 
     @commands.command(hidden=True)
     async def sudo(self, ctx, who: Union[discord.Member, discord.User], *, command: str):
