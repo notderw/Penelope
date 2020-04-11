@@ -45,8 +45,7 @@ initial_extensions = (
     'cogs.meta',
     'cogs.admin',
     'cogs.mod',
-    'cogs.reddiscord',
-    'cogs.meme',
+    'cogs.dm',
 )
 
 async def _prefix_callable(bot, msg):
