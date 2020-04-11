@@ -8,7 +8,7 @@ import aiohttp
 
 from collections import Counter, deque
 
-from  motor.motor_asyncio import AsyncIOMotorClient
+from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 from pymongo.errors import ServerSelectionTimeoutError
 import aioredis
 
@@ -212,7 +212,7 @@ class Penelope(commands.AutoShardedBot):
             await guild.leave()
 
     async def guild_config(self, guild_id) -> dict:
-        doc = await self.mongo.penelope.guild_config.find_one({"id": guild_id})
+        doc = await self.db.guild_config.find_one({"id": guild_id})
         return doc or {}
 
     async def close(self):
@@ -229,6 +229,8 @@ class Penelope(commands.AutoShardedBot):
         self.mongo = AsyncIOMotorClient(host=DB_HOST, port=int(DB_PORT), username=DB_USER, password=DB_PASSWORD, authMechanism='SCRAM-SHA-256')
         # motor doesnt attempt a connection until you try to do something
         await self.mongo.admin.command("ismaster")
+        # Default bot database
+        self.db: AsyncIOMotorDatabase = self.mongo.penelope
         print("Connected to mongo")
 
     async def init_redis(self):
