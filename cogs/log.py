@@ -199,7 +199,7 @@ class Log(commands.Cog):
         else:
             e = discord.Embed(color = 0xF44336)
             e.timestamp = datetime.now()
-            e.description = f'Message `{payload.channel_id} was deleted from <#{payload.channel_id}>`, unfortunately the message was not cached'
+            e.description = f'Message `{payload.channel_id}` was deleted from <#{payload.channel_id}>, unfortunately the message was not cached'
             await config.channel.send(embed=e)
             return
 
