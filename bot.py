@@ -51,6 +51,7 @@ initial_extensions = (
     'cogs.dm',
     'cogs.modqueue',
     'cogs.dew',
+    'cogs.beeple',
 )
 
 async def _prefix_callable(bot, msg):

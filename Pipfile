@@ -13,6 +13,8 @@ derw = {git = "https://github.com/notderw/python-util"}
 parsedatetime = "*"
 python-dateutil = "*"
 lru-dict = "*"
+praw = "*"
+peony-twitter = "*"
 
 [requires]
 python_version = "3.7"
