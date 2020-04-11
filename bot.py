@@ -29,11 +29,7 @@ REDIS_HOST = os.environ.get("REDIS_HOST")
 REDIS_PASSWORD = os.environ.get("REDIS_PASSWORD")
 
 # DATABASE
-DB_HOST = os.environ.get("DB_HOST")
-DB_PORT = os.environ.get("DB_PORT")
-DB_DB = os.environ.get("DB_DB")
-DB_USER = os.environ.get("DB_USER")
-DB_PASSWORD = os.environ.get("DB_PASSWORD")
+MONGO_URI = os.environ.get("MONGO_URI")
 
 # STATS
 STATS_ID = os.environ.get("STATS_ID")
@@ -226,7 +222,7 @@ class Penelope(commands.AutoShardedBot):
         self.session = aiohttp.ClientSession()
 
     async def init_mongo(self):
-        self.mongo = AsyncIOMotorClient(host=DB_HOST, port=int(DB_PORT), username=DB_USER, password=DB_PASSWORD, authMechanism='SCRAM-SHA-256')
+        self.mongo = AsyncIOMotorClient(MONGO_URI)
         # motor doesnt attempt a connection until you try to do something
         await self.mongo.admin.command("ismaster")
         # Default bot database
