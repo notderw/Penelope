@@ -30,8 +30,6 @@ MONGO_URI = os.environ.get("MONGO_URI")
 STATS_ID = os.environ.get("STATS_ID")
 STATS_TOKEN = os.environ.get("STATS_TOKEN")
 
-loop = asyncio.get_event_loop()
-
 formatter = logging.Formatter(f'[%(asctime)s][%(levelname)s] %(message)s', '%Y-%m-%d %H:%M:%S')
 log = logging.getLogger('Penelope')
 console = logging.StreamHandler()
@@ -247,6 +245,8 @@ class Penelope(commands.AutoShardedBot):
 
 def run():
     bot = Penelope()
+
+    loop = asyncio.get_event_loop()
 
     loop.run_until_complete(bot.init_http())
 
