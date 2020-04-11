@@ -4,6 +4,9 @@ url = "https://pypi.org/simple"
 verify_ssl = true
 
 [dev-packages]
+opencv-python = "*"
+scipy = "*"
+numba = "<=0.47"
 
 [packages]
 discord-py = "*"
