@@ -16,10 +16,6 @@ import discord
 from discord.ext import commands
 from cogs.utils import context
 
-# from .cogs.util import Collection
-logging.getLogger('discord').setLevel(logging.INFO)
-logging.getLogger('discord.http').setLevel(logging.WARNING)
-
 # DISCORD
 TOKEN = os.environ.get("TOKEN")
 CLIENT_ID = os.environ.get("CLIENT_ID")
@@ -36,7 +32,11 @@ STATS_TOKEN = os.environ.get("STATS_TOKEN")
 
 loop = asyncio.get_event_loop()
 
-log = logging.getLogger()
+formatter = logging.Formatter(f'[%(asctime)s][%(levelname)s] %(message)s', '%Y-%m-%d %H:%M:%S')
+log = logging.getLogger('Penelope')
+console = logging.StreamHandler()
+console.setFormatter(formatter)
+log.addHandler(console)
 log.setLevel(logging.INFO)
 
 description = """
@@ -91,7 +91,7 @@ class Penelope(commands.AutoShardedBot):
             try:
                 self.load_extension(extension)
             except Exception as e:
-                print(f'Failed to load extension {extension}.', file=sys.stderr)
+                log.error(f'Failed to load extension {extension}.')
                 traceback.print_exc()
 
     async def on_socket_response(self, msg):
@@ -143,7 +143,7 @@ class Penelope(commands.AutoShardedBot):
         if not hasattr(self, 'uptime'):
             self.uptime = datetime.datetime.utcnow()
 
-            print(f'Ready: {self.user} (ID: {self.user.id})')
+            log.info(f'Ready: {self.user} (ID: {self.user.id})')
 
     @property
     def stats_webhook(self):
@@ -226,10 +226,11 @@ class Penelope(commands.AutoShardedBot):
         await self.mongo.admin.command("ismaster")
         # Default bot database
         self.db: AsyncIOMotorDatabase = self.mongo.penelope
-        print("Connected to mongo")
+        log.info("Connected to mongo")
 
     async def init_redis(self):
         self.redis = await aioredis.create_redis_pool(REDIS_URI)
+        log.info("Connected to redis")
 
     def run(self):
         try:
