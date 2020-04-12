@@ -399,7 +399,7 @@ class ModQueue(commands.Cog):
     @config.command()
     async def toggle(self, ctx):
         config = await self.get_config(ctx.guild.id)
-        config = await self.update_config({"modqueue.enabled": not config.enabled})
+        config = await self.update_config(ctx.guild.id, {"modqueue.enabled": not config.enabled})
         await ctx.send(f'ModQueue -> {config.enabled=}')
 
     @config.command()
