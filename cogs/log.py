@@ -247,7 +247,7 @@ class Log(commands.Cog):
 
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
-        if not await self.check_enabled(member.guild_id):
+        if not await self.check_enabled(member.guild.id):
             return
 
         e = discord.Embed(color = 0x4CAF50)
@@ -261,7 +261,7 @@ class Log(commands.Cog):
 
     @commands.Cog.listener()
     async def on_member_remove(self, member: discord.Member):
-        if not await self.check_enabled(member.guild_id):
+        if not await self.check_enabled(member.guild.id):
             return
 
         e = discord.Embed(color = 0xFF9800)
