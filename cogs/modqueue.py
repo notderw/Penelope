@@ -5,7 +5,7 @@ import unicodedata
 import logging
 
 from enum import Enum
-from typing import List
+from typing import List, Optional, Text
 from datetime import datetime
 
 import discord
@@ -15,6 +15,7 @@ from motor.motor_asyncio import AsyncIOMotorCollection
 from pymongo import ReturnDocument
 
 from .utils import cache, checks
+from .utils.config import CogConfig
 
 log = logging.getLogger('Penelope')
 
@@ -34,43 +35,18 @@ re_terms = re.compile("\w*(" + "|".join(banned) + ")\w*", re.MULTILINE | re.IGNO
 
 log.debug(re_terms.pattern)
 
-class NoChannelException(Exception):
-    pass
+class ModQueueConfig(CogConfig):
+    name = 'modqueue'
 
-
-class ModQueueConfig:
-    __slots__ = ('_bot', 'enabled', 'queue_channel_id', 'log_channel_id')
-
-    @classmethod
-    def from_doc(cls, doc, bot):
-        self = cls()
-
-        self._bot: commands.Bot = bot
-
-        modqueue = doc.get('modqueue', {})
-
-        self.enabled = modqueue.get('enabled', False)
-        self.queue_channel_id = modqueue.get('queue_channel_id', None)
-        self.log_channel_id = modqueue.get('log_channel_id', None)
-
-        return self
-
-    def __repr__(self):
-        return f'<{self.__class__.__name__} {self.enabled=}>'
+    enabled: bool = False
+    queue_channel: discord.TextChannel
+    log_channel: discord.TextChannel
 
     @property
-    def queue_channel(self) -> discord.TextChannel:
-        channel = self._bot.get_channel(self.queue_channel_id)
-        if not channel:
-            raise NoChannelException
-        return channel
-
-    @property
-    def log_channel(self) -> discord.TextChannel:
-        channel = self._bot.get_channel(self.log_channel_id)
-        if not channel:
-            raise NoChannelException
-        return channel
+    def check(self):
+        return self.enabled \
+            and self.log_channel is not None \
+            and self.queue_channel is not None
 
 
 class ModQueueItem(object):
@@ -177,8 +153,7 @@ class ModQueue(commands.Cog):
 
     @cache.cache()
     async def get_config(self, guild_id) -> ModQueueConfig:
-        doc = await self.bot.guild_config(guild_id)
-        return ModQueueConfig.from_doc(doc, self.bot)
+        return await ModQueueConfig.from_db(guild_id, self.bot)
 
     async def cog_command_error(self, ctx, error):
         if isinstance(error, commands.BadArgument):
@@ -205,7 +180,7 @@ class ModQueue(commands.Cog):
             return
 
         config = await self.get_config(payload.guild_id)
-        if not config.enabled:
+        if not config.check:
             return
 
         mod = self.bot.get_user(payload.user_id)
@@ -270,7 +245,7 @@ class ModQueue(commands.Cog):
             return
 
         config = await self.get_config(message.guild.id)
-        if not config.enabled:
+        if not config.check:
             return
 
         matches = re_terms.findall(message.clean_content.strip())
@@ -328,7 +303,7 @@ class ModQueue(commands.Cog):
 
     async def check_member_identitity(self, member: discord.Member):
         config = await self.get_config(member.guild.id)
-        if not config.enabled:
+        if not config.check:
             return
 
         for text in [member.name, member.nick]:
@@ -355,62 +330,16 @@ class ModQueue(commands.Cog):
     # COMMANDS #
     ############
 
-    async def update_config(self, guild_id, data):
-        doc = await self.bot.db.guild_config.find_one_and_update(
-            {"id": guild_id},
-            {"$set": data},
-            upsert = True,
-            return_document = ReturnDocument.AFTER
-        )
-        self.get_config.invalidate(self, guild_id)
-        return ModQueueConfig.from_doc(doc, self.bot)
-
-
-    @commands.group(aliases=['mq'])
+    @commands.group(aliases=['mq'], invoke_without_command=True)
     @commands.guild_only()
     @checks.is_mod()
     async def modqueue(self, ctx):
         pass
 
-    @modqueue.group(aliases=['c'], invoke_without_command=True)
-    async def config(self, ctx):
-        # quick n dirty
+    @modqueue.command(aliases=['c'])
+    async def config(self, ctx, param: Optional[Text], arg: Optional[Text]):
         config = await self.get_config(ctx.guild.id)
-        e = discord.Embed(color=0xD81B60)
-        e.description = '```\n'
-
-        for attr in dir(config):
-            try:
-                if attr.startswith('_'):
-                    continue
-
-                val = config.__getattribute__(attr)
-                if callable(val):
-                    continue
-
-                e.description += f'{attr} -> {val}\n'
-
-            except:
-                pass
-
-        e.description += '```'
-        await ctx.send(embed=e)
-
-    @config.command()
-    async def toggle(self, ctx):
-        config = await self.get_config(ctx.guild.id)
-        config = await self.update_config({"modqueue.enabled": not config.enabled})
-        await ctx.send(f'ModQueue -> {config.enabled=}')
-
-    @config.command()
-    async def queue(self, ctx, channel: discord.TextChannel):
-        config = await self.update_config(ctx.guild.id, {"modqueue.queue_channel_id": channel.id})
-        await ctx.send(f'ModQueue -> {config.queue_channel_id=} {config.queue_channel.mention}')
-
-    @config.command()
-    async def log(self, ctx, channel: discord.TextChannel):
-        config = await self.update_config(ctx.guild.id, {"modqueue.log_channel_id": channel.id})
-        await ctx.send(f'ModQueue -> {config.log_channel_id=} {config.log_channel.mention}')
+        await config.handle_command(ctx, param, arg)
 
 
 def setup(bot):
