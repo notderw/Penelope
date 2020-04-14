@@ -31,7 +31,7 @@ banned = [
     "fudgel" # super secret test word
 ]
 
-re_terms = re.compile("\w*(" + "|".join(banned) + ")\w*", re.MULTILINE | re.IGNORECASE)
+re_terms = re.compile("(\w*(" + "|".join(banned) + ")\w*)", re.MULTILINE | re.IGNORECASE)
 
 log.debug(re_terms.pattern)
 
@@ -224,7 +224,12 @@ class ModQueue(commands.Cog):
             e = discord.Embed(color=action.color)
             e.description = ''
             e.description += f'{item.author.mention}\n'
-            e.description += 'Detected words: ' + ' '.join(f'`{x}`' for x in item.matches) + '\n'
+
+            e.description += '**Detected:**\n'
+            for i, m in enumerate(item.matches):
+                e.description += f'{i+1}. `{m[1]}` in "{m[0]}"\n'
+
+            e.description += '\n'
             e.description += f'**In message:**```{item.message.clean_content}```'
 
             e.timestamp = datetime.now()
@@ -256,7 +261,12 @@ class ModQueue(commands.Cog):
         e = discord.Embed(color=0xF44336)
         e.description = ''
         e.description += f'{message.author.mention} [Jump to message](https://discordapp.com/channels/{message.guild.id}/{message.channel.id}/{message.id})\n'
-        e.description += 'Detected words: ' + ' '.join(f'`{x}`' for x in matches) + '\n'
+
+        e.description += '**Detected:**\n'
+        for i, m in enumerate(matches):
+            e.description += f'{i+1}. `{m[1]}` in "{m[0]}"\n'
+
+        e.description += '\n'
         e.description += f'**In message:**```{message.clean_content}```'
 
         strikes: List[ModQueueItem] = []
@@ -266,7 +276,7 @@ class ModQueue(commands.Cog):
         if strikes:
             e.description += f'\n**Previous Strikes ({len(strikes)})**\n'
             for i, strike in enumerate(strikes):
-                e.description += f'{i+1}. ' + ' '.join(f'`{x}`' for x in strike.matches) + f' {strike.action_timestamp.strftime("%b %d %Y")}\n'
+                e.description += f'{i+1}. ' + ' '.join(f'`{m[1]}` in "{m[0]}"' for m in strike.matches) + f' {strike.action_timestamp.strftime("%b %d %Y")}\n'
 
         e.timestamp = datetime.now()
         e.set_author(name=f'{message.author.name}#{message.author.discriminator}', icon_url=message.author.avatar_url)
