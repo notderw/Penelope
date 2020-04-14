@@ -13,9 +13,28 @@ class CogConfig(ABC):
     """Uses python type hints to autofill the guild config for a cog"""
     _bot: Bot
 
-    @property
-    def type_hints(self) -> Dict:
-        return get_type_hints(self)
+    def __new__(cls):
+        self = super().__new__(cls)
+        self.type_hints = get_type_hints(cls)
+        del self.type_hints['_bot'] # ehh
+        return self
+
+
+    def __getattr__(self, name):
+        if name in self.type_hints:
+            hint = self.type_hints[name]
+
+            param_id = self.__getattribute__(f'{name}_id')
+
+            if hint is discord.TextChannel:
+                return self._bot.get_channel(param_id)
+
+            elif hint is discord.User:
+                return self._bot.get_user(param_id)
+
+            else:
+                log.warning(f'{self.__class__.__name__} - {hint} not implemented in __getattr__')
+
 
     @property
     def _embed(self) -> discord.Embed:
@@ -35,7 +54,7 @@ class CogConfig(ABC):
                 await self._update_config(param, arg)
 
                 e = self._embed
-                e.description = f'Set **{param}** = {self.__getattribute__(param)}'
+                e.description = f'Set **{param}** = {getattr(self, param)}'
                 await ctx.send(embed=e)
 
             except BadArgument as e:
@@ -50,7 +69,7 @@ class CogConfig(ABC):
         for param, hint in self.type_hints.items():
             e.description += f'**{param}** ({hint.__name__}) = '
 
-            arg = self.__getattribute__(param)
+            arg = getattr(self, param)
             if isinstance(arg, discord.abc.Messageable):
                 e.description += f'{arg.mention}'
             else:
@@ -99,11 +118,6 @@ class CogConfig(ABC):
         return self
 
 
-    def wrap_lambda(self, func, target):
-        # We have to wrap these functions in another function, or else they will all refer back to the same shit
-        # kinda ugly, but its the only solution I could find
-        return lambda self: func(target)
-
     def from_doc(self, doc: Dict) -> NoReturn:
         doc = doc.get(self.name, {})
         for param, hint in self.type_hints.items():
@@ -113,20 +127,9 @@ class CogConfig(ABC):
 
                 setattr(self, param_id, arg)
 
-                if hint is discord.TextChannel:
-                    func: discord.TextChannel = self.wrap_lambda(self._bot.get_channel, arg)
-
-                elif hint is discord.User:
-                    func: discord.User = self.wrap_lambda(self._bot.get_user, arg)
-
-                else:
-                    log.warning(f'{self.__class__.__name__} - {hint} not implemented in from_doc')
-
-                setattr(self.__class__, param, property(func)) # Low key black magic, setting @property dynamically
-
             else:
                 if hasattr(self, param):
-                    default = self.__getattribute__(param)
+                    default = getattr(self, param)
                 else:
                     default = None
 
@@ -135,7 +138,7 @@ class CogConfig(ABC):
 
 
     def __repr__(self):
-        return f'<{self.__class__.__name__} {" ".join([f"{p}={self.__getattribute__(p)}" for p, h in self.type_hints.items()])}>'
+        return f'<{self.__class__.__name__} {" ".join([f"{p}={getattr(self, p)}" for p, h in self.type_hints.items()])}>'
 
     @property
     @abstractmethod
