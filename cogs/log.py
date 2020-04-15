@@ -2,42 +2,29 @@ import io
 
 import difflib
 from datetime import datetime
-from typing import List
+from typing import List, Optional, Text
 
 import discord
 from discord.ext import commands
 
 from .utils import cache, checks
+from .utils.config import CogConfig
 
-from motor.motor_asyncio import AsyncIOMotorDatabase, AsyncIOMotorCollection
+from motor.motor_asyncio import AsyncIOMotorDatabase
 
 class NoLogChannelException(Exception):
     pass
 
-class LogConfig:
-    __slots__ = ('bot', 'enabled', 'broadcast_channel')
+class LogConfig(CogConfig):
+    name = 'log'
 
-    @classmethod
-    def from_doc(cls, doc, bot):
-        self = cls()
-
-        self.bot: commands.Bot = bot
-
-        log = doc.get('log', {})
-
-        self.enabled = log.get('enabled', False)
-        self.broadcast_channel = log.get('broadcast_channel', None)
-
-        return self
+    enabled: bool
+    broadcast_channel: discord.TextChannel
 
     @property
-    def channel(self) -> discord.TextChannel:
-        channel = self.bot.get_channel(self.broadcast_channel)
-
-        if not channel:
-            raise NoLogChannelException
-
-        return channel
+    def check(self):
+        return self.enabled \
+            and self.broadcast_channel is not None
 
 
 def listener_check(ctx) -> bool:
@@ -51,32 +38,18 @@ class Log(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.db: AsyncIOMotorDatabase = bot.mongo.penelope
-        self.guild_config: AsyncIOMotorCollection = bot.mongo.penelope.guild_config
 
     @cache.cache()
     async def get_config(self, guild_id) -> LogConfig:
-        doc = await self.bot.guild_config(guild_id)
-        return LogConfig.from_doc(doc, self.bot)
-
-    async def update_config(self, guild_id, doc) -> None:
-        await self.guild_config.find_one_and_update(
-            {"id": guild_id},
-            {"$set": doc},
-            upsert = True
-        )
-
-        self.get_config.invalidate(self, guild_id)
-
-    async def check_enabled(self, guild_id) -> bool:
-        config = await self.get_config(guild_id)
-        return config.enabled
+        return await LogConfig.from_db(guild_id, self.bot)
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
         if not message.guild or message.author.bot:
             return
 
-        if not await self.check_enabled(message.guild.id):
+        config = await self.get_config(message.guild.id)
+        if not config.check:
             return
 
         await self.db.messages.insert_one({
@@ -103,7 +76,8 @@ class Log(commands.Cog):
         if not after.guild or after.author.bot:
             return
 
-        if not await self.check_enabled(after.guild.id):
+        config = await self.get_config(after.guild.id)
+        if not config.check:
             return
 
         if before.content == after.content:
@@ -150,8 +124,7 @@ class Log(commands.Cog):
         e.set_author(name=f'{after.author.name}#{after.author.discriminator}', icon_url=before.author.avatar_url)
         e.set_footer(text=f'User ID: {after.author.id}')
 
-        config = await self.get_config(after.guild.id)
-        await config.channel.send(embed=e)
+        await config.broadcast_channel.send(embed=e)
 
     # could just use on_message_delete but I wanna catch fuckers deleting super old shit too
     @commands.Cog.listener()
@@ -159,15 +132,14 @@ class Log(commands.Cog):
         if not payload.guild_id:
             return
 
-        if not await self.check_enabled(payload.guild_id):
+        config = await self.get_config(payload.guild_id)
+        if not config.check:
             return
 
         await self.db.messages.find_one_and_update(
             {"id": payload.message_id},
             {"$set": {"deleted": True}}
         )
-
-        config = await self.get_config(payload.guild_id)
 
         channel: discord.abc.Messageable = self.bot.get_channel(payload.channel_id)
         message: discord.Message = None
@@ -200,7 +172,7 @@ class Log(commands.Cog):
             e = discord.Embed(color = 0xF44336)
             e.timestamp = datetime.now()
             e.description = f'Message `{payload.channel_id}` was deleted from <#{payload.channel_id}>, unfortunately the message was not cached'
-            await config.channel.send(embed=e)
+            await config.broadcast_channel.send(embed=e)
             return
 
         if message.author.bot:
@@ -242,12 +214,12 @@ class Log(commands.Cog):
 
             e.description += f'[Attachment {attachment.filename}]({attachment.proxy_url})\n'
 
-
-        await config.channel.send(embed=e, files=files)
+        await config.broadcast_channel.send(embed=e, files=files)
 
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
-        if not await self.check_enabled(member.guild.id):
+        config = await self.get_config(member.guild.id)
+        if not config.check:
             return
 
         e = discord.Embed(color = 0x4CAF50)
@@ -256,12 +228,12 @@ class Log(commands.Cog):
         e.set_author(name=f'{member.name}#{member.discriminator}', icon_url=member.avatar_url)
         e.set_footer(text=f'ID: {member.id}')
 
-        config = await self.get_config(member.guild_id)
-        await config.channel.send(embed=e)
+        await config.broadcast_channel.send(embed=e)
 
     @commands.Cog.listener()
     async def on_member_remove(self, member: discord.Member):
-        if not await self.check_enabled(member.guild.id):
+        config = await self.get_config(member.guild.id)
+        if not config.check:
             return
 
         e = discord.Embed(color = 0xFF9800)
@@ -270,12 +242,12 @@ class Log(commands.Cog):
         e.set_author(name=f'{member.name}#{member.discriminator}', icon_url=member.avatar_url)
         e.set_footer(text=f'ID: {member.id}')
 
-        config = await self.get_config(member.guild_id)
-        await config.channel.send(embed=e)
+        await config.broadcast_channel.send(embed=e)
 
     @commands.Cog.listener()
     async def on_member_update(self, before: discord.Member, after: discord.Member):
-        if not await self.check_enabled(after.guild.id):
+        config = await self.get_config(after.guild.id)
+        if not config.check:
             return
 
         # I just want to keep track of nickname changes for now
@@ -290,12 +262,12 @@ class Log(commands.Cog):
         e.set_footer(text=f'ID: {after.id}')
         e.timestamp = datetime.now()
 
-        config = await self.get_config(after.guild.id)
-        await config.channel.send(embed=e)
+        await config.broadcast_channel.send(embed=e)
 
     @commands.Cog.listener()
     async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent):
-        if not await self.check_enabled(payload.guild_id):
+        config = await self.get_config(payload.guild_id)
+        if not config.check:
             return
 
         user = self.bot.get_user(payload.user_id)
@@ -308,12 +280,12 @@ class Log(commands.Cog):
         e.description = f'<@{user.id}> **added reaction {payload.emoji} to** [a message](https://discordapp.com/channels/{payload.guild_id}/{payload.channel_id}/{payload.message_id}) in <#{payload.channel_id}>'
         e.timestamp = datetime.now()
 
-        config = await self.get_config(payload.guild_id)
-        await config.channel.send(embed=e)
+        await config.broadcast_channel.send(embed=e)
 
     @commands.Cog.listener()
     async def on_raw_reaction_remove(self, payload: discord.RawReactionActionEvent):
-        if not await self.check_enabled(payload.guild_id):
+        config = await self.get_config(payload.guild_id)
+        if not config.check:
             return
 
         user = self.bot.get_user(payload.user_id)
@@ -326,12 +298,12 @@ class Log(commands.Cog):
         e.description = f'<@{user.id}> **removed reaction {payload.emoji} from** [a message](https://discordapp.com/channels/{payload.guild_id}/{payload.channel_id}/{payload.message_id}) in <#{payload.channel_id}>'
         e.timestamp = datetime.now()
 
-        config = await self.get_config(payload.guild_id)
-        await config.channel.send(embed=e)
+        await config.broadcast_channel.send(embed=e)
 
     @commands.Cog.listener()
     async def on_voice_state_update(self, member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
-        if not await self.check_enabled(member.guild.id):
+        config = await self.get_config(member.guild.id)
+        if not config.check:
             return
 
         e = discord.Embed(color = 0x673AB7)
@@ -351,40 +323,21 @@ class Log(commands.Cog):
 
         e.set_footer(text=f'ID: {member.id}')
 
-        config = await self.get_config(member.guild.id)
-        await config.channel.send(embed=e)
+        await config.broadcast_channel.send(embed=e)
 
     ##########################################################################################
 
-    @commands.group()
+    @commands.group(invoke_without_command=True)
     @commands.guild_only()
     @checks.is_mod()
     async def log(self, ctx):
         if ctx.invoked_subcommand is None:
             await ctx.send_help(ctx.command)
 
-    @log.group()
-    async def config(self, ctx):
-        if ctx.invoked_subcommand is None:
-            await ctx.send_help(ctx.command)
-
-    @config.command()
-    async def enable(self, ctx):
-        await self.update_config(ctx.guild.id, {"log.enabled": True})
-        await ctx.message.add_reaction('\N{OK HAND SIGN}')
-
-    @config.command()
-    async def disable(self, ctx):
-        await self.update_config(ctx.guild.id, {"log.enabled": False})
-        await ctx.message.add_reaction('\N{OK HAND SIGN}')
-
-    @config.command(name='channel')
-    async def broadcast_channel(self, ctx, channel: discord.TextChannel = None):
-        if channel is not None:
-            channel = channel.id
-
-        await self.update_config(ctx.guild.id, {"log.broadcast_channel": channel})
-        await ctx.message.add_reaction('\N{OK HAND SIGN}')
+    @log.command(aliases=['c'])
+    async def config(self, ctx, param: Optional[Text], arg: Optional[Text]):
+        config = await self.get_config(ctx.guild.id)
+        await config.handle_command(ctx, param, arg)
 
 
 def setup(bot):

@@ -94,7 +94,7 @@ class Penelope(commands.AutoShardedBot):
             try:
                 self.load_extension(extension)
             except Exception as e:
-                log.error(f'Failed to load extension {extension}.')
+                log.error(f'{self.__class__.__name__} - Failed to load extension {extension}.')
                 traceback.print_exc()
 
     async def on_socket_response(self, msg):
@@ -146,7 +146,7 @@ class Penelope(commands.AutoShardedBot):
         if not hasattr(self, 'uptime'):
             self.uptime = datetime.datetime.utcnow()
 
-            log.info(f'Ready: {self.user} (ID: {self.user.id})')
+            log.info(f'{self.__class__.__name__} - Ready: {self.user} (ID: {self.user.id})')
 
     @property
     def stats_webhook(self):
@@ -229,11 +229,11 @@ class Penelope(commands.AutoShardedBot):
         await self.mongo.admin.command("ismaster")
         # Default bot database
         self.db: AsyncIOMotorDatabase = self.mongo.penelope
-        log.info("Connected to mongo")
+        log.info(f'{self.__class__.__name__} - Connected to mongo')
 
     async def init_redis(self):
         self.redis = await aioredis.create_redis_pool(REDIS_URI)
-        log.info("Connected to redis")
+        log.info(f'{self.__class__.__name__} - Connected to redis')
 
     def run(self):
         try:
