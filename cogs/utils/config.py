@@ -21,6 +21,9 @@ class CogConfig(ABC):
 
 
     def __getattr__(self, name):
+        if name == 'guild':
+            return self._bot.get_guild(self._guild_id)
+
         if name in self.type_hints:
             hint = self.type_hints[name]
 
@@ -31,6 +34,9 @@ class CogConfig(ABC):
 
             elif hint is discord.User:
                 return self._bot.get_user(param_id)
+
+            elif hint is discord.Role:
+                return self.guild.get_role(param_id)
 
             else:
                 log.warning(f'{self.__class__.__name__} - {hint} not implemented in __getattr__')
@@ -70,7 +76,7 @@ class CogConfig(ABC):
             e.description += f'**{param}** ({hint.__name__}) = '
 
             arg = getattr(self, param)
-            if isinstance(arg, discord.abc.Messageable):
+            if isinstance(arg,  (discord.abc.Messageable, discord.Role)):
                 e.description += f'{arg.mention}'
             else:
                 e.description += f'{arg}'
@@ -91,7 +97,7 @@ class CogConfig(ABC):
     async def _update_config(self, param, arg) -> NoReturn:
         data = {f'{self.name}.{param}': arg}
 
-        if isinstance(arg, discord.abc.Messageable):
+        if isinstance(arg, (discord.abc.Messageable, discord.Role)):
             data = {f'{self.name}.{param}_id': arg.id}
 
         doc = await self._bot.db.guild_config.find_one_and_update(
@@ -113,7 +119,7 @@ class CogConfig(ABC):
         doc = await bot.guild_config(guild_id)
         self.from_doc(doc)
 
-        log.debug(f'{self.__class__.__name__} - Loaded guild {guild_id} config from db')
+        log.debug(f'{self.__class__.__name__} - Loaded guild "{self.guild.name}" ({self.guild.id}) config from db')
 
         return self
 
@@ -121,7 +127,7 @@ class CogConfig(ABC):
     def from_doc(self, doc: Dict) -> NoReturn:
         doc = doc.get(self.name, {})
         for param, hint in self.type_hints.items():
-            if issubclass(hint, discord.abc.Messageable):
+            if issubclass(hint, discord.abc.Messageable) or hint is discord.Role:
                 param_id = f'{param}_id'
                 arg = doc.get(param_id, None)
 
