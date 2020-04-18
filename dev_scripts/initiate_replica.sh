@@ -1,13 +1,13 @@
 #!/bin/bash
 
 echo "Starting replica set initialize"
-until mongo --host mongo -u ${MONGO_USERNAME} -p ${MONGO_PASSWORD} --eval "print(\"waited for connection\")"
+until mongo --host mongo -u ${MONGO_INITDB_ROOT_USERNAME} -p ${MONGO_INITDB_ROOT_PASSWORD} --eval "print(\"waited for connection\")"
 do
     sleep 2
 done
 echo "Connection finished"
 echo "Creating replica set"
-mongo --host mongo -u ${MONGO_USERNAME} -p ${MONGO_PASSWORD} <<EOF
+mongo --host mongo -u ${MONGO_INITDB_ROOT_USERNAME} -p ${MONGO_INITDB_ROOT_PASSWORD} <<EOF
 rs.initiate(
     {
         _id : 'rs0',

@@ -17,10 +17,9 @@ services:
             - "27017:27017"
         volumes:
             - ./data/mongo:/data/db
-        environment:
-            MONGO_INITDB_ROOT_USERNAME: "${DB_USER}"
-            MONGO_INITDB_ROOT_PASSWORD: "${DB_PASSWORD}"
-        command: --replSet rs0
+        env_file:
+            - docker.env
+        command: --replSet rs0 --bind_ip_all
 
     mongoclient:
         container_name: penelope-mongoclient
@@ -29,9 +28,8 @@ services:
             - mongo
         volumes:
             - ./dev_scripts:/dev_scripts
-        environment:
-            MONGO_USERNAME: "${DB_USER}"
-            MONGO_PASSWORD: "${DB_PASSWORD}"
+        env_file:
+            - docker.env
         entrypoint:
             - /dev_scripts/initiate_replica.sh
 
