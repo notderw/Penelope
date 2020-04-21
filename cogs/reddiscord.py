@@ -138,7 +138,7 @@ class Reddiscord(commands.Cog):
                 'You have joined a Reddiscord enabled server!\n'
                 f'Click the link below to get the `{config.verified_role}` role in {member.guild.name}\n'
                 '*Do not share this link with anyone! It is linked __exclusively__ with your Discord account, and will only work once!*\n'
-                f'{BASE_URI}/v/{token}'
+                f'<{BASE_URI}/v/{token}>'
             )
 
             await member.send(message)
