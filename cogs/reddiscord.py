@@ -1,16 +1,104 @@
-import logging
 import asyncio
-import discord
 import datetime
-import typing
+import secrets
+from typing import Union, Optional, Text
+
+import discord
 from discord.ext import commands
 
-from .utils import checks
+from .utils import checks, cache
+from .utils.config import CogConfig
 
+import logging
 log = logging.getLogger('Penelope')
 
-GUILD = 185565668639244289
-VERIFIED_ROLE = 190693397856649216
+BASE_URI = 'https://reddiscord.derw.xyz'
+
+class ReddiscordConfig(CogConfig):
+    name = 'reddiscord'
+
+    enabled: bool = False
+    verified_role: discord.Role
+
+    @property
+    def check(self):
+        return self.enabled \
+            and self.verified_role is not None
+
+
+class ReddiscordUser:
+    token: str
+    verified: bool
+    verified_at: datetime.datetime
+    banned: bool
+
+    def __init__(self, bot: commands.Bot, db):
+        self._bot = bot
+        self._db = db
+
+    @classmethod
+    async def from_discord(cls, bot, db, user: discord.User):
+        self = cls(bot, db)
+
+        doc = await db.users.find_one({'discord.id': user.id})
+        self.from_doc(doc or {'discord': {'name': f'{user.name}#{user.discriminator}', 'id': user.id}})
+
+        return self
+
+    def from_doc(self, doc):
+        self.token = doc.get('token', None)
+        self.verified = doc.get('verified', False)
+        self.verified_at = doc.get('verified_at', None)
+        self.banned = doc.get('banned', False)
+        self.discord = ReddiscordUser.Discord(doc)
+        self.reddit = ReddiscordUser.Reddit(doc)
+        return self
+
+    async def make_token(self):
+        while True:
+            token = secrets.token_urlsafe(128)
+            # Sanity check to prevent double assigning tokens
+            if await self._db.users.count_documents({'secret.token': token}, limit = 1) == 0:
+                break
+
+        await self._db.users.find_one_and_update(
+            {'discord.id': self.discord.id},
+            {'$set': {
+                'token': token,
+                'discord.name': self.discord.name
+            }},
+            upsert = True
+        )
+
+        return token
+
+    async def setprocessed(self):
+        await self._db.users.find_one_and_update(
+            {'discord.id': self.discord.id},
+            {'$set': {
+                'processed': True
+            }},
+        )
+
+
+    class Discord:
+        name: Text
+        id: int
+
+        def __init__(self, doc):
+            d = doc['discord']
+            self.name = d['name']
+            self.id = d['id']
+
+    class Reddit:
+        name: Text
+        id: Text
+
+        def __init__(self, doc):
+            r = doc.get('reddit', {})
+            self.name = r.get('name')
+            self.id = r.get('id')
+
 
 class Reddiscord(commands.Cog):
     """Reddiscord: https://github.com/notderw/rdscrd"""
@@ -21,79 +109,82 @@ class Reddiscord(commands.Cog):
 
         self._task = bot.loop.create_task(self.monitor_db())
 
+    @cache.cache()
+    async def get_config(self, guild_id) -> ReddiscordConfig:
+        return await ReddiscordConfig.from_db(guild_id, self.bot)
+
     def cog_unload(self):
         self._task.cancel()
 
-    def cog_check(self, ctx):
-        if not (ctx.guild and ctx.guild.id == GUILD):
-            return False
-
-        mod_roles = [
-            185565865033465856, # Administrator
-            185565928333770752 # Moderator
-        ]
-
-        if not [role for role in ctx.author.roles if role.id in mod_roles]:
-            return False
-
-        return True
-
     @commands.Cog.listener()
-    async def on_member_join(self, member):
-        if member.guild.id != GUILD:
+    async def on_member_join(self, member: discord.Member):
+        config = await self.get_config(member.guild.id)
+        if not config.check:
             return
 
-        data = await self.db.users.find_one({"discord.id": str(member.id)})
+        ru = await ReddiscordUser.from_discord(self.bot, self.db, member)
 
-        if(data and data.get("verified")):
-            await self.set_verified(member.id)
-
-    @commands.Cog.listener()
-    async def on_member_ban(self, guild, user):
-        if guild.id != GUILD:
+        if ru.verified:
+            await member.add_roles(config.verified_role)
+            log.debug(f'{self.__class__.__name__} - {member.name}#{member.discriminator} ({member.id}) joined {member.guild.name} ({member.guild.id}) and is already verified, added role {config.verified_role}')
             return
 
-        await self.db.users.find_one_and_update({"discord.id": user.id}, {"$set": {"verified": False, "banned": True}})
-        log.info(f'{self.__class__.__name__} - Banned {user.name + "#" + user.discriminator} ON {guild.name}')
+        if not ru.token:
+            log.debug(f'{self.__class__.__name__} - {member.name}#{member.discriminator} ({member.id}) joined {member.guild.name} ({member.guild.id}) and has no token, sending welcome message')
 
-    @commands.Cog.listener()
-    async def on_member_unban(self, guild, user):
-        if guild.id != GUILD:
+            token = await ru.make_token()
+
+            message = (
+                'You have joined a Reddiscord enabled server!\n'
+                f'Click the link below to get the `{config.verified_role}` role in {member.guild.name}\n'
+                '*Do not share this link with anyone! It is linked __exclusively__ with your Discord account, and will only work once!*\n'
+                f'{BASE_URI}/v/{token}'
+            )
+
+            await member.send(message)
             return
 
-        await self.db.users.find_one_and_update({"discord.id": user.id}, {"$set": {"banned": False}})
-        log.info(f'{self.__class__.__name__} - Un-banned {user.name + "#" + user.discriminator} ON {guild.name}')
+        log.debug(f'{self.__class__.__name__} - {ru.discord.name} ({ru.discord.id}) joined {member.guild.name} ({member.guild.id})')
+
+
+    async def process(self, ru: ReddiscordUser):
+        for guild in self.bot.guilds:
+            config = await self.get_config(guild.id)
+            if config.enabled:
+                try:
+                    await guild.get_member(ru.discord.id).add_roles(config.verified_role)
+                    log.info(f'{self.__class__.__name__} - Added role {config.verified_role} to {ru.discord.name} ({ru.discord.id}) on {guild} ({guild.id})')
+                except:
+                    pass
+
+        await ru.setprocessed()
+
+        try:
+            user = self.bot.get_user(ru.discord.id)
+            await user.send('Reddiscord verification successful!')
+        except Exception as e:
+            log.error(f'{self.__class__.__name__} - Error sending message: {e}')
+
 
     async def monitor_db(self):
         await self.bot.wait_until_ready()
-        #First we check the queue for any old additions if this garbage was down
-        backlog = await self.db.queue.find({}).to_list(None)
-        if backlog:
-            log.info(f'{self.__class__.__name__} - Catching up, one sec ({len(backlog)} items)')
 
-            for item in backlog:
-                user = await self.db.users.find_one({"_id": item["ref"]})
+        log.info(f'{self.__class__.__name__} - Monitoring Task Started')
 
-                if user.get("verified"):
-                    await self.set_verified(int(user['discord']['id']))
-
-                else:
-                    log.warning(f'{self.__class__.__name__} - Weird, {item["ref"]} was in the queue but is not verified.')
-
-                await self.db.queue.find_one_and_delete({"_id": item['_id']})
-
-        # Monitor DB for changes
         try:
-            _stream = self.db.queue.watch()
-            log.info(f'{self.__class__.__name__} - Monitoring DB')
-            async for change in _stream:
-                if change["operationType"] == "insert":
-                    user = await self.db.users.find_one({"_id": change["fullDocument"]["ref"]})
+            async for doc in self.db.users.find({'verified': True, 'processed': {'$exists': False}}):
+                ru = ReddiscordUser(self.bot, self.db).from_doc(doc)
+                await self.process(ru)
 
-                    if user.get("verified") and not user.get("banned"):
-                        await self.set_verified(int(user['discord']['id']))
-
-                        await self.db.queue.find_one_and_delete({"_id": change["fullDocument"]['_id']})
+            # Monitor DB for changes
+            async with self.db.users.watch(full_document='updateLookup') as stream:
+                async for change in stream:
+                    if change["operationType"] == "update" \
+                        and 'verified' in change['updateDescription']['updatedFields'] \
+                        and change['updateDescription']['updatedFields']['verified'] == True:
+                            doc = change['fullDocument']
+                            ru = ReddiscordUser(self.bot, self.db).from_doc(doc)
+                            await self.process(ru)
 
         # handle asyncio.Task.cancel
         except asyncio.CancelledError:
@@ -102,35 +193,17 @@ class Reddiscord(commands.Cog):
         except Exception as e:
             log.error(f'{self.__class__.__name__} - Error in Monitoring Task: {e}')
 
-            try:
-                await _stream.close()
-            except:
-                pass
-
             embed = discord.Embed(title='Reddiscord', colour=0xE53935)
             embed.add_field(name='Error in Monitoring Task', value=f'{e}', inline=False)
             embed.timestamp = datetime.datetime.utcnow()
             await self.bot.stats_webhook.send(embed=embed)
 
-            self._task.cancel()
-            self._task = self.bot.loop.create_task(self.monitor_db())
+        #     self._task.cancel()
+        #     self._task = self.bot.loop.create_task(self.monitor_db())
 
-    async def set_verified(self, member_id):
-        guild = self.bot.get_guild(GUILD) # Get serer object from ID
-        role = discord.utils.get(guild.roles, id=VERIFIED_ROLE) # Get role object of verified role by ID
-        member = guild.get_member(member_id) # Get member object by discord user ID
-
-        if member: # Someone might verify before they join the server idk
-            try:
-                await member.add_roles(role) # Add user as verified
-                await member.send("Congratulations! You are now verified!") # Send the verified message
-            except Exception as e:
-                log.error(f'{self.__class__.__name__} - Error asdding role for {member.name}#{member.discriminator} in {guild.name}: {e}') # Log an error if there was a problem
-            else:
-                log.info(f'{self.__class__.__name__} - Verified {member.name}#{member.discriminator} in {guild.name}')
-
+    @checks.is_mod()
     @commands.group(name='reddiscord', invoke_without_command=True, aliases=['rdscrd', 'verification'])
-    async def reddiscord(self, ctx, query: typing.Union[discord.User, str]):
+    async def reddiscord(self, ctx, query: Union[discord.User, str]):
         """Query a reddit or Discord user to see their verification status"""
         print(type(query), query)
         if isinstance(query, str) and query.startswith('/u/'):
@@ -145,9 +218,14 @@ class Reddiscord(commands.Cog):
         await self.reddit(ctx, ruser)
 
     @reddiscord.command(name='discord', aliases=['d'])
-    async def rd(self, ctx, *, duser: typing.Union[discord.User, str]):
+    async def rd(self, ctx, *, duser: Union[discord.User, str]):
         """Force query a Discord account"""
         await self.discord(ctx, duser)
+
+    @reddiscord.command(aliases=['c'])
+    async def config(self, ctx, param: Optional[Text], arg: Optional[Text]):
+        config = await self.get_config(ctx.guild.id)
+        await config.handle_command(ctx, param, arg)
 
     async def reddit(self, ctx, ruser):
         data = await self.db.users.find_one({"reddit.name": { "$regex": ruser.replace("/u/", ""), "$options": "i"}})
