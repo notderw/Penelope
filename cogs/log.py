@@ -321,6 +321,9 @@ class Log(commands.Cog):
                 else:
                     e.description += f'**left voice channel** {before.channel.name}'
 
+            else:
+                return
+
         e.set_footer(text=f'ID: {member.id}')
 
         await config.broadcast_channel.send(embed=e)
