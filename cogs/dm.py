@@ -58,7 +58,7 @@ class DM(commands.Cog):
         e.description = f'**Message recieved:**\n{message.content}'
         e.timestamp = datetime.now()
         e.set_author(name=f'{message.author.name}#{message.author.discriminator}', icon_url=message.author.avatar_url)
-        e.set_footer(text=f'User ID: {message.author.id}')
+        e.set_footer(text=f'{message.author.id}')
 
         files = await self.attachments_to_files(message.attachments)
 
@@ -132,7 +132,7 @@ class DM(commands.Cog):
 
         e.timestamp = datetime.now()
         e.set_author(name=f'{user.name}#{user.discriminator}', icon_url=user.avatar_url)
-        e.set_footer(text=f'Recipient ID: {user.id}')
+        e.set_footer(text=f'{user.id}')
 
         await ctx.send(embed=e)
 
