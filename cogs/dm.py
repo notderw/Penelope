@@ -1,3 +1,6 @@
+from io import BytesIO
+from typing import Optional, List, Text
+
 import discord
 
 from datetime import datetime
@@ -35,8 +38,16 @@ class DM(commands.Cog):
             else:
                 print(original)
 
+    async def attachments_to_files(self, attachments: List[discord.Attachment]) -> List[discord.File]:
+        files = []
+        for attachment in attachments:
+            buffer = BytesIO(await attachment.read())
+            files.append(discord.File(buffer, filename=attachment.filename))
+
+        return files
+
     @commands.Cog.listener()
-    async def on_message(self, message):
+    async def on_message(self, message: discord.Message):
         if message.author.id == self.bot.user.id:
             return
 
@@ -44,12 +55,14 @@ class DM(commands.Cog):
             return
 
         e = discord.Embed(color = 0x4CAF50)
-        e.description = f'**Message recieved** <@{message.author.id}>\n{message.content}'
+        e.description = f'**Message recieved:**\n{message.content}'
         e.timestamp = datetime.now()
         e.set_author(name=f'{message.author.name}#{message.author.discriminator}', icon_url=message.author.avatar_url)
         e.set_footer(text=f'User ID: {message.author.id}')
 
-        await self.dm_channel.send(embed=e)
+        files = await self.attachments_to_files(message.attachments)
+
+        await self.dm_channel.send(embed=e, files=files)
 
     @commands.group(name='dm', invoke_without_command=True, hidden=True)
     @commands.is_owner()
@@ -104,13 +117,21 @@ class DM(commands.Cog):
         await ctx.send(f'```Last {limit} messages```\n```{table}```', embed=e)
 
     @dm.command(aliases=['s'])
-    async def send(self, ctx, user: discord.User, *, msg):
-        await user.send(msg)
+    async def send(self, ctx, user: discord.User, *, msg: Optional[Text] = ""):
+        files = await self.attachments_to_files(ctx.message.attachments)
+
+        sent = await user.send(msg, files=files)
 
         e = discord.Embed(color = 0x2196F3)
-        e.description = f'**Message sent to** <@{user.id}>\n{msg}'
+        e.description = f'**Message sent:**\n{msg}'
+
+        if sent.attachments:
+            e.description += "\n\n**Attachments:**\n"
+            for attachment in sent.attachments:
+                e.description += f'[{attachment.filename}]({attachment.url})\n'
+
         e.timestamp = datetime.now()
-        e.set_author(name=f'{ctx.author.name}#{ctx.author.discriminator}', icon_url=ctx.author.avatar_url)
+        e.set_author(name=f'{user.name}#{user.discriminator}', icon_url=user.avatar_url)
         e.set_footer(text=f'Recipient ID: {user.id}')
 
         await ctx.send(embed=e)
