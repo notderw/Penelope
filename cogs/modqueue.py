@@ -143,6 +143,9 @@ class Action(Enum):
             return cls(list(EMOJI_MAP.keys())[list(EMOJI_MAP.values()).index(val)])
         except ValueError:
             return None
+        except TypeError:
+            log.debug(f'ModQueue:Action - Failed to decode emoji "{emoji.name}"')
+            return None
 
 class ModQueue(commands.Cog):
     """ModQueue for flagged words"""
