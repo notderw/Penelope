@@ -22,9 +22,9 @@ log = logging.getLogger('Penelope')
 banned = [
     "nig(?:ga|ger)",
     "fag",
-    "tard",
+    "(?<!bas)tard",
     "jew",
-    "^(?!sus)spic(?!y)",  # Matches `spic` but not `suspicious` or `spicy`
+    "(?<!su)spic(?!y)",  # Matches `spic` but not `suspicious` or `spicy`
     "chink",
     "gay",
     "queer",
