@@ -9,6 +9,8 @@ from peony import PeonyClient
 
 from typing import List
 
+from .utils.logging import CogLogger
+
 # TWITTER
 TWITTER_CONSUMER_TOKEN = os.environ.get("TWITTER_CONSUMER_TOKEN")
 TWITTER_CONSUMER_SECRET = os.environ.get("TWITTER_CONSUMER_SECRET")
@@ -30,10 +32,12 @@ class BeepleObject(object):
         self.title = re_hashtag.sub("", tweet.text[:-23])
         self.url = tweet.entities['media'][0]['media_url_https'] + "?name=orig"
 
+        self.log = CogLogger('Penelope', self)
+
     async def submit(self, subreddit: praw.models.Subreddits) -> None:
         submission = subreddit.submit(self.title, url=self.url, flair_id='8c1b7e86-e96b-11e8-852f-0e6f8368cab6', resubmit=False)
         submission.mod.approve()
-        print(f'Submitted {self.title} {submission.shortlink}')
+        self.log.info(f'Submitted {self.title} {submission.shortlink}')
 
     async def queue(self, channel: discord.abc.Messageable) -> None:
         m = await channel.send(embed=self.embed)
