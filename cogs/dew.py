@@ -5,17 +5,45 @@ import random
 import unicodedata
 
 from datetime import datetime
+from typing import List, Dict, NoReturn
 
 import discord
 from discord.ext import commands, tasks
 
 from mcstatus import MinecraftServer
 
+from .utils import cache
+from .utils.config import CogConfig
+
 
 GUILD_ID = 216389071457615872
 
-MC_CHANNEL = 612478356562378753
-MC_MESSAGE = 694383807683493949
+class MinecraftConfig(CogConfig):
+    name = 'minecraft'
+
+    enabled: bool = False
+    message: discord.Message
+    servers: List = []
+
+    class Server:
+        __slots__ = ('name', 'ip', 'port')
+
+        def __init__(self, doc):
+            print(doc)
+            self.name = doc["name"]
+            self.ip = doc["ip"]
+            self.port = doc["port"]
+
+    def from_doc(self, doc: Dict) -> NoReturn:
+        super().from_doc(doc)
+
+        self.servers: List[MinecraftConfig.Server] = [self.Server(s) for s in self.servers]
+
+    @property
+    def check(self):
+        return self.enabled \
+            and self.message_id is not None
+
 
 class Dew(commands.Cog):
     """thiccc bot for dew's server"""
@@ -31,13 +59,15 @@ class Dew(commands.Cog):
     def cog_check(self, ctx):
         return ctx.guild and ctx.guild.id == GUILD_ID
 
+    @cache.cache()
+    async def minecraft_config(self) -> MinecraftConfig:
+        return await MinecraftConfig.from_db(GUILD_ID, self.bot)
+
     @tasks.loop(minutes=10)
     async def minecraft(self):
-        servers = {
-            'mc.derw.xyz': ('192.168.150.65', 25565),
-            'mc2.derw.xyz': ('192.168.150.65', 25566),
-            'mc3.derw.xyz': ('192.168.150.66', 25566)
-        }
+        config = await self.minecraft_config()
+        if not config.check:
+            return False
 
         e = discord.Embed(color=0x4CAF50)
         e.title = "Minecraft Status"
@@ -46,10 +76,10 @@ class Dew(commands.Cog):
         members_lower = {m.name.lower(): m.id for m in self.bot.get_guild(GUILD_ID).members}
 
         any_online = False
-        for name, addr in servers.items():
-            server = MinecraftServer(*addr)
+        for s in config.servers:
+            server = MinecraftServer(s.ip, int(s.port))
 
-            e.description += f'__**{name}**__'
+            e.description += f'__**{s.name}**__'
 
             try:
                 status = await server.status()
@@ -91,7 +121,7 @@ class Dew(commands.Cog):
         if not any_online:
             e.color = 0xF44336
 
-        message: discord.Message = await self.bot.get_channel(MC_CHANNEL).fetch_message(MC_MESSAGE)
+        message: discord.Message = await config.message
         await message.edit(content="", embed=e)
 
 
