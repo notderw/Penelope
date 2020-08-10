@@ -29,7 +29,6 @@ class MinecraftConfig(CogConfig):
         __slots__ = ('name', 'ip', 'port')
 
         def __init__(self, doc):
-            print(doc)
             self.name = doc["name"]
             self.ip = doc["ip"]
             self.port = doc["port"]
