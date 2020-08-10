@@ -178,7 +178,7 @@ class ModQueue(commands.Cog):
             await user.send(message)
 
         except discord.Forbidden as e:
-            self.log.debug(f'{self.__class__.__name__} Could not send DM to {user.name}#{user.discriminator} ({user.id}): {e}')
+            self.log.debug(f'Could not send DM to {user.name}#{user.discriminator} ({user.id}): {e}')
             await ctx.send(f'Could not send message to `{user.name}#{user.discriminator}`, user must have DM\'s disabled')
 
     @commands.Cog.listener()
@@ -214,7 +214,7 @@ class ModQueue(commands.Cog):
                 await item.message.delete()
 
         except discord.NotFound:
-            self.log.debug(f'{self.__class__.__name__} Message not found, ignoring')
+            self.log.debug(f'Message not found, ignoring')
             pass
 
         except Exception as e:
