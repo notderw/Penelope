@@ -1,3 +1,5 @@
+import inspect
+
 from abc import ABC, abstractmethod
 from typing import get_type_hints, cast, Dict, Any, NoReturn
 
@@ -37,6 +39,10 @@ class CogConfig(ABC):
 
             elif hint is discord.Role:
                 return self.guild.get_role(param_id)
+
+            elif hint is discord.Message:
+                param = list(map(int, param_id.split(':')))
+                return self._bot.get_channel(param[0]).fetch_message(param[1])
 
             else:
                 log.warning(f'{self.__class__.__name__} - {hint} not implemented in __getattr__')
@@ -127,7 +133,7 @@ class CogConfig(ABC):
     def from_doc(self, doc: Dict) -> NoReturn:
         doc = doc.get(self.name, {})
         for param, hint in self.type_hints.items():
-            if issubclass(hint, discord.abc.Messageable) or hint is discord.Role:
+            if (inspect.isclass(hint) and issubclass(hint, discord.abc.Messageable)) or hint in [discord.Role, discord.Message]:
                 param_id = f'{param}_id'
                 arg = doc.get(param_id, None)
 
