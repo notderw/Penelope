@@ -2,7 +2,6 @@
 import re
 import traceback
 import unicodedata
-import logging
 
 from enum import Enum
 from typing import List, Optional, Text
@@ -16,8 +15,7 @@ from pymongo import ReturnDocument
 
 from .utils import cache, checks
 from .utils.config import CogConfig
-
-log = logging.getLogger('Penelope')
+from .utils.logging import CogLogger
 
 banned = [
     "nig(?:ga|ger)",
@@ -33,7 +31,6 @@ banned = [
 
 re_terms = re.compile("(\w*(" + "|".join(banned) + ")\w*)", re.MULTILINE | re.IGNORECASE)
 
-log.debug(re_terms.pattern)
 
 class ModQueueConfig(CogConfig):
     name = 'modqueue'
@@ -144,7 +141,7 @@ class Action(Enum):
         except ValueError:
             return None
         except TypeError:
-            log.debug(f'ModQueue:Action - Failed to decode emoji "{emoji.name}"')
+            self.log.debug(f'ModQueue:Action - Failed to decode emoji "{emoji.name}"')
             return None
 
 class ModQueue(commands.Cog):
@@ -153,6 +150,10 @@ class ModQueue(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.collection: AsyncIOMotorCollection = self.bot.db.modqueue
+
+        self.log = CogLogger('Penelope', self)
+
+        self.log.debug(re_terms.pattern)
 
     @cache.cache()
     async def get_config(self, guild_id) -> ModQueueConfig:
@@ -177,7 +178,7 @@ class ModQueue(commands.Cog):
             await user.send(message)
 
         except discord.Forbidden as e:
-            log.debug(f'{self.__class__.__name__} Could not send DM to {user.name}#{user.discriminator} ({user.id}): {e}')
+            self.log.debug(f'{self.__class__.__name__} Could not send DM to {user.name}#{user.discriminator} ({user.id}): {e}')
             await ctx.send(f'Could not send message to `{user.name}#{user.discriminator}`, user must have DM\'s disabled')
 
     @commands.Cog.listener()
@@ -213,7 +214,7 @@ class ModQueue(commands.Cog):
                 await item.message.delete()
 
         except discord.NotFound:
-            log.debug(f'{self.__class__.__name__} Message not found, ignoring')
+            self.log.debug(f'{self.__class__.__name__} Message not found, ignoring')
             pass
 
         except Exception as e:
