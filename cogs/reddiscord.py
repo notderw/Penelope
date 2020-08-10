@@ -8,9 +8,7 @@ from discord.ext import commands
 
 from .utils import checks, cache
 from .utils.config import CogConfig
-
-import logging
-log = logging.getLogger('Penelope')
+from .utils.logging import CogLogger
 
 BASE_URI = 'https://reddiscord.derw.xyz'
 
@@ -107,6 +105,8 @@ class Reddiscord(commands.Cog):
         self.bot = bot
         self.db = bot.mongo.reddiscord
 
+        self.log = CogLogger('Penelope', self)
+
         self._task = bot.loop.create_task(self.monitor_db())
 
     @cache.cache()
@@ -126,11 +126,11 @@ class Reddiscord(commands.Cog):
 
         if ru.verified:
             await member.add_roles(config.verified_role)
-            log.debug(f'{self.__class__.__name__} - {member.name}#{member.discriminator} ({member.id}) joined {member.guild.name} ({member.guild.id}) and is already verified, added role {config.verified_role}')
+            self.log.debug(f'{member.name}#{member.discriminator} ({member.id}) joined {member.guild.name} ({member.guild.id}) and is already verified, added role {config.verified_role}')
             return
 
         if not ru.token:
-            log.debug(f'{self.__class__.__name__} - {member.name}#{member.discriminator} ({member.id}) joined {member.guild.name} ({member.guild.id}) and has no token, sending welcome message')
+            self.log.debug(f'{member.name}#{member.discriminator} ({member.id}) joined {member.guild.name} ({member.guild.id}) and has no token, sending welcome message')
 
             token = await ru.make_token()
 
@@ -144,7 +144,7 @@ class Reddiscord(commands.Cog):
             await member.send(message)
             return
 
-        log.debug(f'{self.__class__.__name__} - {ru.discord.name} ({ru.discord.id}) joined {member.guild.name} ({member.guild.id})')
+        self.log.debug(f'{ru.discord.name} ({ru.discord.id}) joined {member.guild.name} ({member.guild.id})')
 
 
     async def process(self, ru: ReddiscordUser):
@@ -153,7 +153,7 @@ class Reddiscord(commands.Cog):
             if config.enabled:
                 try:
                     await guild.get_member(ru.discord.id).add_roles(config.verified_role)
-                    log.info(f'{self.__class__.__name__} - Added role {config.verified_role} to {ru.discord.name} ({ru.discord.id}) on {guild} ({guild.id})')
+                    self.log.info(f'Added role {config.verified_role} to {ru.discord.name} ({ru.discord.id}) on {guild} ({guild.id})')
                 except:
                     pass
 
@@ -163,13 +163,13 @@ class Reddiscord(commands.Cog):
             user = self.bot.get_user(ru.discord.id)
             await user.send('Reddiscord verification successful!')
         except Exception as e:
-            log.error(f'{self.__class__.__name__} - Error sending message: {e}')
+            self.log.error(f'Error sending message: {e}')
 
 
     async def monitor_db(self):
         await self.bot.wait_until_ready()
 
-        log.info(f'{self.__class__.__name__} - Monitoring Task Started')
+        self.log.info(f'Monitoring Task Started')
 
         try:
             async for doc in self.db.users.find({'verified': True, 'processed': {'$exists': False}}):
@@ -188,10 +188,10 @@ class Reddiscord(commands.Cog):
 
         # handle asyncio.Task.cancel
         except asyncio.CancelledError:
-            log.warning(f'{self.__class__.__name__} - Monitoring Task Killed')
+            self.log.warning(f'Monitoring Task Killed')
 
         except Exception as e:
-            log.error(f'{self.__class__.__name__} - Error in Monitoring Task: {e}')
+            self.log.error(f'Error in Monitoring Task: {e}')
 
             embed = discord.Embed(title='Reddiscord', colour=0xE53935)
             embed.add_field(name='Error in Monitoring Task', value=f'{e}', inline=False)
