@@ -172,6 +172,13 @@ class ModQueue(commands.Cog):
             else:
                 await ctx.send(f'```{error}```')
 
+    async def dm(self, user: discord.User, message, ctx):
+        try:
+            await user.send(message)
+
+        except discord.Forbidden as e:
+            log.debug(f'{self.__class__.__name__} Could not send DM to {user.name}#{user.discriminator} ({user.id}): {e}')
+            await ctx.send(f'Could not send message to `{user.name}#{user.discriminator}`, user must have DM\'s disabled')
 
     @commands.Cog.listener()
     async def on_raw_reaction_add(self, payload):
@@ -198,21 +205,20 @@ class ModQueue(commands.Cog):
 
         try:
             if action is Action.BAN:
-                await item.author.send(f'You have been banned from {item.guild.name} for the following message:\n> {item.message.clean_content}\n\nTo appeal this ban, please contact /r/AMD modmail: https://www.reddit.com/message/compose?to=/r/AMD')
+                await self.dm(item.author, f'You have been banned from {item.guild.name} for the following message:\n> {item.message.clean_content}\n\nTo appeal this ban, please contact /r/AMD modmail: https://www.reddit.com/message/compose?to=/r/AMD', config.log_channel)
                 await item.guild.ban(item.author, reason = 'Use of "' + ', '.join(item.matches) + f'". Queue ID: {item.id}')
 
             elif action is Action.STRIKE:
-                await item.author.send(f'You have been issued a strike in {item.guild.name} for the following message:\n> {item.message.clean_content}')
-
+                await self.dm(item.author, f'You have been issued a strike in {item.guild.name} for the following message:\n> {item.message.clean_content}', config.log_channel)
                 await item.message.delete()
 
         except discord.NotFound:
-            log.info(f'{self.__class__.__name__} Message not found, ignoring')
+            log.debug(f'{self.__class__.__name__} Message not found, ignoring')
             pass
 
         except Exception as e:
             traceback.print_exc()
-            await config.log_channel.send(f'Error handling action {action.name.lower()} on {item.author.name}, {e}')
+            await config.log_channel.send(f'Unhandled exception handling action {action.name.lower()} on `{user.name}#{user.discriminator}`, {e}')
 
         finally:
             await self.collection.find_one_and_update(
