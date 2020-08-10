@@ -206,7 +206,7 @@ class ModQueue(commands.Cog):
         try:
             if action is Action.BAN:
                 await self.dm(item.author, f'You have been banned from {item.guild.name} for the following message:\n> {item.message.clean_content}\n\nTo appeal this ban, please contact /r/AMD modmail: https://www.reddit.com/message/compose?to=/r/AMD', config.log_channel)
-                await item.guild.ban(item.author, reason = 'Use of "' + ', '.join(item.matches) + f'". Queue ID: {item.id}')
+                await item.guild.ban(item.author, reason = f'Message: "{item.message.clean_content}". Queue ID: {item.id}')
 
             elif action is Action.STRIKE:
                 await self.dm(item.author, f'You have been issued a strike in {item.guild.name} for the following message:\n> {item.message.clean_content}', config.log_channel)
