@@ -218,7 +218,7 @@ class ModQueue(commands.Cog):
 
         except Exception as e:
             traceback.print_exc()
-            await config.log_channel.send(f'Unhandled exception handling action {action.name.lower()} on `{user.name}#{user.discriminator}`, {e}')
+            await config.log_channel.send(f'Unhandled exception handling action {action.name.lower()} on `{item.author.name}#{item.author.discriminator}`, {e}')
 
         finally:
             await self.collection.find_one_and_update(
