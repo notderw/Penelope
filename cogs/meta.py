@@ -13,6 +13,7 @@ import typing
 import random
 import pygit2
 import platform
+from io import BytesIO
 from typing import List, Optional
 
 class Prefix(commands.Converter):
@@ -587,11 +588,20 @@ class Meta(commands.Cog):
         perms.add_reactions = True
         await ctx.send(f'<{discord.utils.oauth_url(self.bot.client_id, perms)}>')
 
+    async def attachments_to_files(self, attachments: List[discord.Attachment]) -> List[discord.File]:
+        files = []
+        for attachment in attachments:
+            buffer = BytesIO(await attachment.read())
+            files.append(discord.File(buffer, filename=attachment.filename))
+
+        return files
+
     @commands.command(rest_is_raw=True, hidden=True)
     @commands.is_owner()
     async def echo(self, ctx, channel: typing.Optional[typing.Union[discord.TextChannel, discord.User]], *, content):
         dest = channel if channel else ctx
-        await dest.send(content)
+        files = await self.attachments_to_files(ctx.message.attachments)
+        await dest.send(content, files=files)
 
     @commands.command(hidden=True)
     async def cud(self, ctx):
