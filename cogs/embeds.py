@@ -59,12 +59,8 @@ class Embeds(commands.Cog):
 
         j = json.dumps({"embeds": embeds})
 
-        if len(j) > 2000:
-            fp = BytesIO(bytes(j, encoding='utf-8'))
-            await ctx.send(file=discord.File(fp, filename='embed.json'))
-            return
-
-        await ctx.send(f'```{j}```')
+        fp = BytesIO(bytes(j, encoding='utf-8'))
+        await ctx.send(file=discord.File(fp, filename='embed.json'))
 
     @embeds.command()
     async def edit(self, ctx, messageable: Optional[discord.TextChannel], message_id: int, *, j: Optional[str]):
