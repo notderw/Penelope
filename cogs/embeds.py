@@ -57,9 +57,10 @@ class Embeds(commands.Cog):
         for embed in message.embeds:
             embeds.append(embed.to_dict())
 
-        j = json.dumps({"embeds": embeds})
+        if len(embeds) == 1:
+            embeds = embeds[0]
 
-        fp = BytesIO(bytes(j, encoding='utf-8'))
+        fp = BytesIO(bytes(json.dumps(embeds), encoding='utf-8'))
         await ctx.send(file=discord.File(fp, filename='embed.json'))
 
     @embeds.command()
