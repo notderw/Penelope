@@ -1,6 +1,7 @@
 import re
 import json
 
+from io import BytesIO
 from typing import Optional
 
 import discord
@@ -35,9 +36,12 @@ class Embeds(commands.Cog):
         pass
 
     @embeds.command()
-    async def create(self, ctx, messageable: Optional[discord.TextChannel], *, j: str):
+    async def create(self, ctx, messageable: Optional[discord.TextChannel], *, j: Optional[str]):
         if not messageable:
             messageable = ctx
+
+        if not j and ctx.message.attachments:
+            j = await ctx.message.attachments[0].read()
 
         await messageable.send(embed=self.build(j))
         await ctx.send("\N{OK HAND SIGN}")
@@ -53,12 +57,22 @@ class Embeds(commands.Cog):
         for embed in message.embeds:
             embeds.append(embed.to_dict())
 
-        await ctx.send(f'```{json.dumps({"embeds": embeds})}```')
+        j = json.dumps({"embeds": embeds})
+
+        if len(j) > 2000:
+            fp = BytesIO(bytes(j, encoding='utf-8'))
+            await ctx.send(file=discord.File(fp, filename='embed.json'))
+            return
+
+        await ctx.send(f'```{j}```')
 
     @embeds.command()
-    async def edit(self, ctx, messageable: Optional[discord.TextChannel], message_id: int, *, j: str):
+    async def edit(self, ctx, messageable: Optional[discord.TextChannel], message_id: int, *, j: Optional[str]):
         if not messageable:
             messageable = ctx
+
+        if not j and ctx.message.attachments:
+            j = await ctx.message.attachments[0].read()
 
         message = await messageable.fetch_message(message_id)
         await message.edit(embed=self.build(j))
