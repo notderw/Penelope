@@ -30,6 +30,9 @@ MONGO_URI = os.environ.get("MONGO_URI")
 STATS_ID = os.environ.get("STATS_ID")
 STATS_TOKEN = os.environ.get("STATS_TOKEN")
 
+# DEVELOPMENT
+DEVELOPMENT = os.environ.get("DEVELOPMENT")
+
 formatter = logging.Formatter(f'[%(asctime)s][%(levelname)s] %(message)s', '%Y-%m-%d %H:%M:%S')
 log = logging.getLogger('Penelope')
 console = logging.StreamHandler()
@@ -53,6 +56,9 @@ initial_extensions = (
     'cogs.dew',
     'cogs.beeple',
 )
+
+if DEVELOPMENT:
+    initial_extensions = initial_extensions + ('cogs.development',)
 
 async def _prefix_callable(bot, msg):
     user_id = bot.user.id
@@ -78,6 +84,7 @@ class Penelope(commands.AutoShardedBot):
                          pm_help=None, help_attrs=dict(hidden=True), fetch_offline_members=False)
 
         self.client_id = CLIENT_ID
+        self.development = DEVELOPMENT
 
         self._prev_events = deque(maxlen=10)
 
@@ -147,6 +154,9 @@ class Penelope(commands.AutoShardedBot):
             self.uptime = datetime.datetime.utcnow()
 
             log.info(f'{self.__class__.__name__} - Ready: {self.user} (ID: {self.user.id})')
+
+        if self.development:
+            log.info(f'{self.__class__.__name__} - Development mode enabled')
 
     @property
     def stats_webhook(self):
