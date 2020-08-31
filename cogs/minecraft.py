@@ -1,4 +1,5 @@
 import re
+import traceback
 
 from datetime import datetime
 from typing import List, Dict, Optional, NoReturn
@@ -85,13 +86,17 @@ class Minecraft(commands.Cog):
         await self.bot.wait_until_ready()
 
         async for doc in self.bot.db.guild_config.find({'minecraft.enabled': True}, {'id': True}):
-            guild_id = doc['id']
-            config = await self.get_config(guild_id)
+            try:
+                guild_id = doc['id']
+                config = await self.get_config(guild_id)
 
-            e = await self.render(config)
+                e = await self.render(config)
 
-            message: discord.Message = await config.message
-            await message.edit(content="", embed=e)
+                message: discord.Message = await config.message
+                await message.edit(content="", embed=e)
+
+            except Exception as e:
+                traceback.print_exc()
 
     async def render(self, config):
         e = discord.Embed(color=0x4CAF50)
