@@ -90,6 +90,9 @@ class Minecraft(commands.Cog):
                 guild_id = doc['id']
                 config = await self.get_config(guild_id)
 
+                if not config.check:
+                    continue
+
                 e = await self.render(config)
 
                 message: discord.Message = await config.message
