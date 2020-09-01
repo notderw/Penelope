@@ -40,11 +40,11 @@ class ModConfig:
 
         # the basic configuration
         self.bot = bot
-        self.raid_mode = record['raid_mode']
         self.id = record['id']
-        self.broadcast_channel_id = record['broadcast_channel']
-        self.mention_count = record['mention_count']
-        self.safe_mention_channel_ids = set(record['safe_mention_channel_ids'] or [])
+        self.raid_mode = record.get('raid_mode', False)
+        self.broadcast_channel_id = record.get('broadcast_channel', None)
+        self.mention_count = record.get('mention_count', 0)
+        self.safe_mention_channel_ids = set(record.get('safe_mention_channel_ids', []))
         return self
 
     @property
