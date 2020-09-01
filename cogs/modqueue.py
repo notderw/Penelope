@@ -141,7 +141,7 @@ class Action(Enum):
         except ValueError:
             return None
         except TypeError:
-            self.log.debug(f'ModQueue:Action - Failed to decode emoji "{emoji.name}"')
+            print(f'ModQueue:Action - Failed to decode emoji "{emoji.name}"')
             return None
 
 class ModQueue(commands.Cog):
