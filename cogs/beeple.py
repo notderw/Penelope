@@ -61,7 +61,7 @@ class Beeple(commands.Cog):
 
         self.queue : List[BeepleObject] = []
 
-        self.reddit = praw.Reddit('RenegadeAI', user_agent='Penelope Discord bot by /u/RenegadeAI')
+        self.reddit = praw.Reddit('everydays-bot', user_agent='/r/beeple content bot - /u/RenegadeAI')
         self.subreddit = self.reddit.subreddit('beeple')
 
         self.twitter = PeonyClient(consumer_key=TWITTER_CONSUMER_TOKEN,
