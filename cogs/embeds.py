@@ -7,6 +7,12 @@ from typing import Optional
 import discord
 from discord.ext import commands
 
+from .utils.checks import is_admin
+
+from urllib.parse import urlparse, parse_qs
+from base64 import b64decode, b64encode
+
+DISCOHOOK_BASE = 'https://discohook.org'
 
 class Embeds(commands.Cog):
     def __init__(self, bot):
@@ -26,52 +32,66 @@ class Embeds(commands.Cog):
             else:
                 await ctx.send(f'```{error}```')
 
-    def build(self, j) -> discord.Embed:
-        data = json.loads(j)
-        return discord.Embed.from_dict(data)
+    def build(self, j: str) -> discord.Embed:
+        if j.startswith(DISCOHOOK_BASE):
+            b64 = parse_qs(urlparse(j).query).get('message')[0] + '===' # Python doesn't care about extra padding
+            j = b64decode(b64).decode('utf-8')
+
+            data = json.loads(j)['message']
+
+        else:
+            data = json.loads(j)
+
+        return discord.Embed.from_dict(data['embeds'][0])
 
     @commands.group(name='embeds', aliases=['e'], hidden=True)
-    @commands.is_owner()
+    @is_admin()
     async def embeds(self, ctx):
         pass
 
     @embeds.command()
-    async def create(self, ctx, messageable: Optional[discord.TextChannel], *, j: Optional[str]):
-        if not messageable:
-            messageable = ctx
+    async def create(self, ctx, channel: Optional[discord.TextChannel], *, j: Optional[str]):
+        if not channel:
+            channel = ctx
 
         if not j and ctx.message.attachments:
             j = await ctx.message.attachments[0].read()
 
-        await messageable.send(embed=self.build(j))
+        await channel.send(embed=self.build(j))
         await ctx.send("\N{OK HAND SIGN}")
 
     @embeds.command()
-    async def dump(self, ctx, messageable: Optional[discord.TextChannel], message_id: int):
-        if not messageable:
-            messageable = ctx
+    async def dump(self, ctx, channel: Optional[discord.TextChannel], message_id: int, return_json: Optional[bool] = False):
+        if not channel:
+            channel = ctx
 
-        message = await messageable.fetch_message(message_id)
+        message = await channel.fetch_message(message_id)
 
         embeds = []
         for embed in message.embeds:
             embeds.append(embed.to_dict())
 
-        if len(embeds) == 1:
-            embeds = embeds[0]
+        j = json.dumps({"message": {"embeds": embeds}})
+        b64 = b64encode(j.encode('utf-8')).decode('utf-8')
 
-        fp = BytesIO(bytes(json.dumps(embeds), encoding='utf-8'))
-        await ctx.send(file=discord.File(fp, filename='embed.json'))
+        url = f'{DISCOHOOK_BASE}/?message={b64}'
+
+        if len(url) > 2000 or return_json:
+            fp = BytesIO(bytes(j, encoding='utf-8'))
+            await ctx.send(file=discord.File(fp, filename='embed.json'))
+            return
+
+        await ctx.send(f'<{url}>')
 
     @embeds.command()
-    async def edit(self, ctx, messageable: Optional[discord.TextChannel], message_id: int, *, j: Optional[str]):
-        if not messageable:
-            messageable = ctx
+    async def edit(self, ctx, channel: Optional[discord.TextChannel], message_id: int, *, j: Optional[str]):
+        if not channel:
+            channel = ctx
 
         if not j and ctx.message.attachments:
             j = await ctx.message.attachments[0].read()
 
-        message = await messageable.fetch_message(message_id)
+        message = await channel.fetch_message(message_id)
         await message.edit(embed=self.build(j))
         await ctx.send("\N{OK HAND SIGN}")
 
