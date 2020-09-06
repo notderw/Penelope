@@ -47,21 +47,28 @@ class Embeds(commands.Cog):
     @commands.group(name='embeds', aliases=['e'], hidden=True)
     @is_admin()
     async def embeds(self, ctx):
-        pass
+        """Create and edit embeds
+
+        Uses https://discohook.org for ease of viewing and editing embeds
+        """
+        if ctx.invoked_subcommand is None:
+            await ctx.send_help(ctx.command)
 
     @embeds.command()
-    async def create(self, ctx, channel: Optional[discord.TextChannel], *, j: Optional[str]):
+    async def create(self, ctx, channel: Optional[discord.TextChannel], *, source: Optional[str]):
+        """Create an embed from a discohook url or raw json"""
         if not channel:
             channel = ctx
 
-        if not j and ctx.message.attachments:
-            j = await ctx.message.attachments[0].read()
+        if not source and ctx.message.attachments:
+            source = await ctx.message.attachments[0].read()
 
-        await channel.send(embed=self.build(j))
+        await channel.send(embed=self.build(source))
         await ctx.send("\N{OK HAND SIGN}")
 
     @embeds.command()
     async def dump(self, ctx, channel: Optional[discord.TextChannel], message_id: int, return_json: Optional[bool] = False):
+        """Get the source json data for an embed, returns a discohook url by default"""
         if not channel:
             channel = ctx
 
@@ -84,15 +91,16 @@ class Embeds(commands.Cog):
         await ctx.send(f'<{url}>')
 
     @embeds.command()
-    async def edit(self, ctx, channel: Optional[discord.TextChannel], message_id: int, *, j: Optional[str]):
+    async def edit(self, ctx, channel: Optional[discord.TextChannel], message_id: int, *, source: Optional[str]):
+        """Edit an embed"""
         if not channel:
             channel = ctx
 
-        if not j and ctx.message.attachments:
-            j = await ctx.message.attachments[0].read()
+        if not source and ctx.message.attachments:
+            source = await ctx.message.attachments[0].read()
 
         message = await channel.fetch_message(message_id)
-        await message.edit(embed=self.build(j))
+        await message.edit(embed=self.build(source))
         await ctx.send("\N{OK HAND SIGN}")
 
 
