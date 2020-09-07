@@ -10,7 +10,7 @@ from discord.ext import commands
 from .utils.checks import is_admin
 
 from urllib.parse import urlparse, parse_qs
-from base64 import b64decode, b64encode
+from base64 import urlsafe_b64decode, urlsafe_b64encode
 
 DISCOHOOK_BASE = 'https://discohook.org'
 
@@ -35,7 +35,7 @@ class Embeds(commands.Cog):
     def build(self, j: str) -> discord.Embed:
         if j.startswith(DISCOHOOK_BASE):
             b64 = parse_qs(urlparse(j).query).get('message')[0] + '===' # Python doesn't care about extra padding
-            j = b64decode(b64).decode('utf-8')
+            j = urlsafe_b64decode(b64).decode('utf-8')
 
             data = json.loads(j)['message']
 
@@ -79,7 +79,7 @@ class Embeds(commands.Cog):
             embeds.append(embed.to_dict())
 
         j = json.dumps({"message": {"embeds": embeds}})
-        b64 = b64encode(j.encode('utf-8')).decode('utf-8')
+        b64 = urlsafe_b64encode(j.encode('utf-8')).decode('utf-8')
 
         url = f'{DISCOHOOK_BASE}/?message={b64}'
 
