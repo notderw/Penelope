@@ -16,7 +16,6 @@ parsedatetime = "*"
 python-dateutil = "*"
 lru-dict = "*"
 praw = "*"
-prettytable = "*"
 pygit2 = "*"
 peony-twitter = "*"
 mcstatus = {editable = true,git = "https://github.com/notderw/mcstatus.git",ref = "async"}

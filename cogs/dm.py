@@ -1,15 +1,17 @@
 from io import BytesIO
+from datetime import datetime
 from typing import Optional, List, Text
 
 import discord
-
-from datetime import datetime
 from discord.ext import commands
-from prettytable import PrettyTable, MSWORD_FRIENDLY
 
-from .utils.formats import TabularData
+from pymongo.collection import Collection
 
-DM_CHANNEL = 621139648143556628
+GUILD = 187711261377691648
+CATEGORY = 752680280950702161
+
+class InvalidDMContext(Exception):
+    pass
 
 class DM(commands.Cog):
     """Direct Message management commands"""
@@ -17,12 +19,20 @@ class DM(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    async def cog_check(self, ctx):
-        return await self.bot.is_owner(ctx.author)
+        self.collection: Collection = bot.db.dm
+
 
     @property
-    def dm_channel(self):
-        return self.bot.get_channel(DM_CHANNEL)
+    def guild(self) -> discord.Guild:
+        return self.bot.get_guild(GUILD)
+
+    @property
+    def category(self) -> discord.CategoryChannel:
+        return self.guild.get_channel(CATEGORY)
+
+
+    async def cog_check(self, ctx):
+        return await self.bot.is_owner(ctx.author)
 
     async def cog_command_error(self, ctx, error):
         if isinstance(error, commands.BadArgument):
@@ -35,8 +45,42 @@ class DM(commands.Cog):
                 await ctx.send(f'This entity does not exist: {original.text}')
             elif isinstance(original, discord.HTTPException):
                 await ctx.send('Somehow, an unexpected error occurred. Try again later?')
+            elif isinstance(original, InvalidDMContext):
+                await ctx.send('You can\'t do that here')
             else:
                 print(original)
+
+
+    async def user_from_channel(self, channel: discord.TextChannel) -> discord.User:
+        doc = await self.collection.find_one({'channel': channel.id}, {'user': True})
+        return self.bot.get_user(doc['user'])
+
+    async def get_dm_channel(self, user: discord.User) -> discord.TextChannel:
+        doc = await self.collection.find_one({'user': user.id}, {'channel': True})
+
+        if doc and 'channel' in doc:
+            return self.guild.get_channel(doc['channel'])
+
+        channel = await self.category.create_text_channel(str(user))
+
+        await self.collection.find_one_and_update(
+            {'user': user.id},
+            {'$set': {'channel': channel.id}},
+            upsert=True
+        )
+
+        await self.system_message(channel, f'Created new DM channel for {user} {user.mention} ({user.id})')
+
+        return channel
+
+    async def system_message(self, channel: discord.TextChannel, message: str):
+        bot = self.guild.get_member(self.bot.user.id)
+        e = discord.Embed(description='', color=bot.color)
+        e.set_author(name=f'[SYSTEM]')
+        e.description += f'{message}'
+        e.timestamp = datetime.now()
+
+        await channel.send(embed=e)
 
     async def attachments_to_files(self, attachments: List[discord.Attachment]) -> List[discord.File]:
         files = []
@@ -46,6 +90,7 @@ class DM(commands.Cog):
 
         return files
 
+
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
         if message.author.id == self.bot.user.id:
@@ -54,89 +99,65 @@ class DM(commands.Cog):
         if message.guild:
             return
 
+        channel = await self.get_dm_channel(message.author)
+
         e = discord.Embed(color = 0x4CAF50)
-        e.description = f'**Message recieved:**\n{message.content}'
+        e.description = f'{message.content}'
         e.timestamp = datetime.now()
         e.set_author(name=f'{message.author.name}#{message.author.discriminator}', icon_url=message.author.avatar_url)
-        e.set_footer(text=f'{message.author.id}')
 
         files = await self.attachments_to_files(message.attachments)
 
-        await self.dm_channel.send(embed=e, files=files)
+        await channel.send(embed=e, files=files)
+
 
     @commands.group(name='dm', invoke_without_command=True, hidden=True)
-    @commands.is_owner()
     async def dm(self, ctx):
+        if ctx.invoked_subcommand is None:
+            await ctx.send_help(ctx.command)
 
-        table = PrettyTable()
-        table.border = False
-        table.header = False
-        table.align = 'l'
-        table.padding_width = 1
+    @dm.command()
+    async def new(self, ctx, user: discord.User):
+        channel = await self.get_dm_channel(user)
+        await ctx.send(f'{channel.mention}')
 
-        for channel in reversed(self.bot.private_channels):
-            if hasattr(channel, 'recipient'):
-                table.add_row([f'{channel.recipient.name}#{channel.recipient.discriminator}\n{channel.created_at.strftime("%Y%m%d %H%M")} UTC', f'{channel.recipient.id}'])
+    @dm.command(aliases=['r', 'send', 's'])
+    async def reply(self, ctx, *, msg: Optional[Text] = ""):
+        if not ctx.channel.category_id or ctx.channel.category_id != CATEGORY:
+            raise InvalidDMContext()
 
-        print(table)
+        user = await self.user_from_channel(ctx.channel)
 
-        e = discord.Embed(color = 0x29B6F6)
-        e.description = f'**Recent DMs** \n\n ```{table}```'
-        e.timestamp = datetime.now()
-        await ctx.send(embed=e)
-
-    @dm.command(aliases=['h'])
-    async def history(self, ctx, user: discord.User, limit: int = 10):
-        if not user.dm_channel:
-            return await ctx.send("No DM histroy with this user")
-
-        table = PrettyTable(["Name", "Message"])
-        table.border = False
-        table.header = False
-        table.align = "l"
-        table.padding_width = 1
-
-        last_author = None
-        for message in reversed(await user.dm_channel.history(limit=limit).flatten()):
-            if message.author == last_author:
-
-                table.add_row(['', message.clean_content])
-                last_author = None
-
-            else:
-                table.add_row([f'{message.author.name}', message.clean_content])
-
-            last_author = message.author
-
-        e = discord.Embed(color = 0x29B6F6)
-        # e.description = f'**DM History**'
-        e.timestamp = user.dm_channel.created_at
-        e.set_author(name=f'{user.name}#{user.discriminator}', icon_url=user.avatar_url)
-        e.set_footer(text=f'ID: {user.id}')
-
-        await ctx.send(f'```Last {limit} messages```\n```{table}```', embed=e)
-
-    @dm.command(aliases=['s'])
-    async def send(self, ctx, user: discord.User, *, msg: Optional[Text] = ""):
         files = await self.attachments_to_files(ctx.message.attachments)
 
-        sent = await user.send(msg, files=files)
+        try:
+            sent = await user.send(msg, files=files)
+        except discord.Forbidden as e:
+            await self.system_message(ctx, f'Error: {e.text}')
+            return
 
         e = discord.Embed(color = 0x2196F3)
-        e.description = f'**Message sent:**\n{msg}'
-
-        if sent.attachments:
-            e.description += "\n\n**Attachments:**\n"
-            for attachment in sent.attachments:
-                e.description += f'[{attachment.filename}]({attachment.url})\n'
+        e.description = f'{msg}'
 
         e.timestamp = datetime.now()
         e.set_author(name=f'{user.name}#{user.discriminator}', icon_url=user.avatar_url)
-        e.set_footer(text=f'{user.id}')
 
-        await ctx.send(embed=e)
+        # lazyass
+        files = await self.attachments_to_files(sent.attachments)
+        await ctx.send(embed=e, files=files)
 
         await ctx.message.delete()
+
+    @dm.command()
+    async def close(self, ctx):
+        if not ctx.channel.category_id or ctx.channel.category_id != CATEGORY:
+            raise InvalidDMContext()
+
+        user = await self.user_from_channel(ctx.channel)
+        await self.collection.find_one_and_delete({'user': user.id})
+
+        await ctx.channel.delete(reason=f'DM closed by {ctx.author}')
+
 
 def setup(bot):
     bot.add_cog(DM(bot))
