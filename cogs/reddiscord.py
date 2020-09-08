@@ -156,7 +156,12 @@ class Reddiscord(commands.Cog):
             config = await self.get_config(guild.id)
             if config.enabled:
                 try:
-                    await guild.get_member(ru.discord.id).add_roles(config.verified_role)
+                    member = guild.get_member(ru.discord.id)
+                    if not member:
+                        continue
+
+                    await member.add_roles(config.verified_role)
+
                     self.log.info(f'Added role {config.verified_role} to {ru.discord.name} ({ru.discord.id}) on {guild} ({guild.id})')
                 except Exception as e:
                     self.log.error(f'Error adding role {config.verified_role} to {ru.discord.name} ({ru.discord.id}) on {guild} ({guild.id}): {e}')
