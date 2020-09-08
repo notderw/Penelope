@@ -36,6 +36,7 @@ STATS_TOKEN = os.environ.get("STATS_TOKEN")
 DEVELOPMENT = os.environ.get("DEVELOPMENT")
 
 log = makeLogger('Penelope')
+log.setLevel(logging.INFO)
 
 description = """
 Hello human.
