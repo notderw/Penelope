@@ -16,6 +16,8 @@ import discord
 from discord.ext import commands
 from cogs.utils import context
 
+from derw import makeLogger
+
 # DISCORD
 TOKEN = os.environ.get("TOKEN")
 CLIENT_ID = os.environ.get("CLIENT_ID")
@@ -33,12 +35,7 @@ STATS_TOKEN = os.environ.get("STATS_TOKEN")
 # DEVELOPMENT
 DEVELOPMENT = os.environ.get("DEVELOPMENT")
 
-formatter = logging.Formatter(f'[%(asctime)s][%(levelname)s] %(message)s', '%Y-%m-%d %H:%M:%S')
-log = logging.getLogger('Penelope')
-console = logging.StreamHandler()
-console.setFormatter(formatter)
-log.addHandler(console)
-log.setLevel(logging.INFO)
+log = makeLogger('Penelope')
 
 description = """
 Hello human.
@@ -58,6 +55,7 @@ initial_extensions = (
 )
 
 if DEVELOPMENT:
+    log.setLevel(logging.DEBUG)
     initial_extensions = initial_extensions + ('cogs.development',)
 
 async def _prefix_callable(bot, msg):

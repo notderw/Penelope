@@ -19,6 +19,7 @@ praw = "*"
 pygit2 = "*"
 peony-twitter = "*"
 mcstatus = {editable = true,git = "https://github.com/notderw/mcstatus.git",ref = "async"}
+derw = {git = "https://github.com/notderw/python-util.git"}
 
 [requires]
 python_version = "3.8"
