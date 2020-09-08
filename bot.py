@@ -52,6 +52,8 @@ initial_extensions = (
     'cogs.modqueue',
     'cogs.dew',
     'cogs.beeple',
+    'cogs.minecraft',
+    'cogs.embeds'
 )
 
 if DEVELOPMENT:
