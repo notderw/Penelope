@@ -141,7 +141,11 @@ class Reddiscord(commands.Cog):
                 f'<{BASE_URI}/v/{token}>'
             )
 
-            await member.send(message)
+            try:
+                await member.send(message)
+            except discord.Forbidden as e:
+                self.log.error(f'Could not send join message to {member}: {e.text}')
+
             return
 
         self.log.debug(f'{ru.discord.name} ({ru.discord.id}) joined {member.guild.name} ({member.guild.id})')
