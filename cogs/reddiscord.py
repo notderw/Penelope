@@ -159,7 +159,7 @@ class Reddiscord(commands.Cog):
                     await guild.get_member(ru.discord.id).add_roles(config.verified_role)
                     self.log.info(f'Added role {config.verified_role} to {ru.discord.name} ({ru.discord.id}) on {guild} ({guild.id})')
                 except:
-                    pass
+                    self.log.error(f'Error adding role {config.verified_role} to {ru.discord.name} ({ru.discord.id}) on {guild} ({guild.id}): {e}')
 
         await ru.setprocessed()
 
