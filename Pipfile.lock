@@ -223,7 +223,7 @@
         "mcstatus": {
             "editable": true,
             "git": "https://github.com/notderw/mcstatus.git",
-            "ref": "e49390b81edf73bbcd320b7ef834fe4808639602"
+            "ref": "e536d521ebf25b9fbc783f4badb76da1bd5444ff"
         },
         "motor": {
             "hashes": [
