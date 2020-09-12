@@ -140,7 +140,7 @@ class DM(commands.Cog):
         e.description = f'{msg}'
 
         e.timestamp = datetime.now()
-        e.set_author(name=f'{user.name}#{user.discriminator}', icon_url=user.avatar_url)
+        e.set_author(name=f'{ctx.author.name}#{ctx.author.discriminator}', icon_url=ctx.author.avatar_url)
 
         # lazyass
         files = await self.attachments_to_files(sent.attachments)
