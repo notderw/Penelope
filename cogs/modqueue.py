@@ -135,7 +135,7 @@ class Action(Enum):
             if emoji.is_custom_emoji():
                 val = f'<:{emoji.name}:{emoji.id}>'
             else:
-                val = unicodedata.name(emoji.name)
+                val = unicodedata.name(emoji.name[0])
             # ugly but it works
             return cls(list(EMOJI_MAP.keys())[list(EMOJI_MAP.values()).index(val)])
         except ValueError:
