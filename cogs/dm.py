@@ -153,9 +153,7 @@ class DM(commands.Cog):
         if not ctx.channel.category_id or ctx.channel.category_id != CATEGORY:
             raise InvalidDMContext()
 
-        user = await self.user_from_channel(ctx.channel)
-        await self.collection.find_one_and_delete({'user': user.id})
-
+        await self.collection.find_one_and_delete({'channel': ctx.channel.id})
         await ctx.channel.delete(reason=f'DM closed by {ctx.author}')
 
 
