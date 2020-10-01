@@ -69,7 +69,10 @@ class DM(commands.Cog):
             upsert=True
         )
 
-        await self.system_message(channel, f'Created new DM channel for {user} {user.mention} ({user.id})')
+        msg = f'Created new DM channel for **{user}** {user.mention} ({user.id})\n\n'
+        msg += f'**Mutual guilds:** {", ".join([str(guild) for guild in self.bot.guilds if user in guild.members])}'
+
+        await self.system_message(channel, msg)
 
         return channel
 
