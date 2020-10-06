@@ -82,7 +82,8 @@ async def _prefix_callable(bot, msg):
 class Penelope(commands.AutoShardedBot):
     def __init__(self):
         super().__init__(command_prefix=_prefix_callable, description=description,
-                         pm_help=None, help_attrs=dict(hidden=True), fetch_offline_members=False)
+                         pm_help=None, help_attrs=dict(hidden=True), fetch_offline_members=False,
+                         intents=discord.Intents.all())
 
         self.client_id = CLIENT_ID
         self.development = DEVELOPMENT
