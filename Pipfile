@@ -15,6 +15,9 @@ lru-dict = "*"
 praw = "*"
 pygit2 = "*"
 peony-twitter = "*"
+aiogoogle = "*"
+pydantic = "*"
+watchgod = "*"
 
 [requires]
 python_version = "3.8"
