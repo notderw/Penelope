@@ -160,5 +160,20 @@ class DM(commands.Cog):
         await ctx.channel.delete(reason=f'DM closed by {ctx.author}')
 
 
+    @dm.command()
+    async def closeall(self, ctx, nuke: bool = False):
+        if nuke:
+            for channel in self.category.channels:
+                await channel.delete()
+
+        else:
+            async for doc in self.collection.find({}):
+                channel = self.bot.get_channel(doc['channel'])
+                await channel.delete()
+
+        res = await self.collection.delete_many({})
+        await ctx.send(f'Deleted {res.deleted_count} channels')
+
+
 def setup(bot):
     bot.add_cog(DM(bot))
