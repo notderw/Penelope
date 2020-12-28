@@ -31,26 +31,33 @@ class CogConfig(ABC):
 
         if name in self.type_hints:
             hint = self.type_hints[name]
+            param_id = self.__getattribute__(self._serialize_param(name))
 
-            param_id = self.__getattribute__(f'{name}_id')
+            if typing.get_origin(hint) is list:
+                hint = typing.get_args(hint)[0]
+                return [self._get_param(p_id, hint) for p_id in param_id]
 
-            if hint is discord.TextChannel:
-                return self._bot.get_channel(param_id)
+            return self._get_param(param_id, hint)
 
-            elif hint is discord.User:
-                return self._bot.get_user(param_id)
 
-            elif hint is discord.Role:
-                return self.guild.get_role(param_id)
+    def _get_param(self, param_id, hint):
+        if hint is discord.TextChannel:
+            return self._bot.get_channel(param_id)
 
-            elif hint is discord.Message:
-                if not param_id:
-                    return None
-                param = list(map(int, param_id.split(':')))
-                return self._bot.get_channel(param[0]).fetch_message(param[1])
+        elif hint is discord.User:
+            return self._bot.get_user(param_id)
 
-            else:
-                log.warning(f'{self.__class__.__name__} - {hint} not implemented in __getattr__')
+        elif hint is discord.Role:
+            return self.guild.get_role(param_id)
+
+        elif hint is discord.Message:
+            if not param_id:
+                return None
+            param = list(map(int, param_id.split(':')))
+            return self._bot.get_channel(param[0]).fetch_message(param[1])
+
+        else:
+            log.warning(f'{self.__class__.__name__} - {hint} not implemented in __getattr__')
 
 
     @property
@@ -62,14 +69,38 @@ class CogConfig(ABC):
 
     async def handle_command(self, ctx: Context, *args):
         args = list(args)
-
         if not any(args):
             await self._send_params(ctx)
 
         else:
             param = args.pop(0)
             try:
-                arg = await self._convert_argument(ctx, args, param)
+                if param not in self.type_hints:
+                    raise BadArgument(f'`{param}` is not a valid config option')
+
+                hint = self.type_hints[param]
+                origin = typing.get_origin(hint)
+
+                if origin is list:
+                    action = args.pop(0).strip()
+                    hint = typing.get_args(self.type_hints[param])[0]
+
+                    singlearg = await self._convert_argument(ctx, hint, args, param)
+
+                    arg = getattr(self, param)
+
+                    if action == 'add':
+                        if not singlearg in arg:
+                            arg.append(singlearg)
+
+                    elif action == 'remove':
+                        arg.remove(singlearg)
+
+                    else:
+                        raise BadArgument(f'Must use \'add\' or \'remove\' for List parameter {param}')
+
+                else:
+                    arg = await self._convert_argument(ctx, hint, args, param)
 
                 await self._update_config(param, arg)
 
@@ -92,6 +123,14 @@ class CogConfig(ABC):
         else:
             return f'**{param}** ({hint.__name__}) = '
 
+    def _render_val(self, val) -> str:
+        if isinstance(val, (discord.abc.Messageable, discord.Role)):
+            return val.mention
+        elif isinstance(val, discord.Message):
+            return f'[Message]({val.jump_url})'
+        else:
+            return val
+
     async def _render_arg(self, param) -> str:
         arg = getattr(self, param)
 
@@ -99,17 +138,13 @@ class CogConfig(ABC):
             arg = await arg
 
         if isinstance(arg, Iterable):
-            return ''.join([f'- {s}\n' for s in arg])
-        elif isinstance(arg,  (discord.abc.Messageable, discord.Role)):
-            return f'{arg.mention}'
-        elif isinstance(arg, discord.Message):
-            return f'[Message]({arg.jump_url})'
+            return '\n'.join([f'- {self._render_val(s)}' for s in arg])
         else:
-            return f'{arg}'
+            return self._render_val(arg)
 
     async def _render_param(self, param):
         return await self._render_hint(param) \
-            + await self._render_arg(param) \
+            + str(await self._render_arg(param)) \
             + '\n'
 
     async def _send_params(self, ctx):
@@ -123,32 +158,55 @@ class CogConfig(ABC):
         e.description += ''
         await ctx.send(embed=e)
 
+    async def _convert_argument(self, ctx, converter, args, param) -> Any:
+        if converter is discord.Message:
+            converter = discord.TextChannel
 
-    async def _convert_argument(self, ctx, args, param) -> Any:
-        if param not in self.type_hints:
-            raise BadArgument(f'`{param}` is not a valid config option')
+        if converter is str:
+            args = ' '.join(args)
+        else:
+            args = args[0]
 
-        hint = self.type_hints[param]
+        converted = await ctx.command._actual_conversion(ctx, converter, args, param)
 
-        if hint is discord.Message:
-            hint = discord.TextChannel
-
-        converted = await ctx.command._actual_conversion(ctx, hint, args[0], param)
-
-        if self.type_hints[param] is discord.Message:
+        if converter is discord.Message:
             return await converted.fetch_message(args[1])
 
         return converted
 
+    def _make_key(self, param, hint):
+        if issubclass(hint, discord.abc.Snowflake):
+            return f'{param}_id'
+
+        return f'{param}'
+
+    def _serialize_param(self, param) -> dict:
+        hint = self.type_hints[param]
+
+        if typing.get_origin(hint) is list:
+            hint = typing.get_args(hint)[0]
+
+            return f'{self._make_key(param, hint)}s'
+
+        return self._make_key(param, hint)
+
+    def _make_val(self, val):
+        if isinstance(val, discord.Message):
+            return f'{val.channel.id}:{val.id}'
+
+        if issubclass(type(val), discord.abc.Snowflake):
+            return val.id
+
+        return val
+
+    def _serialize_arg(self, val):
+        if isinstance(val, list):
+            return [self._make_val(v) for v in val]
+
+        return self._make_val(val)
 
     async def _update_config(self, param, arg) -> NoReturn:
-        data = {f'{self.name}.{param}': arg}
-
-        if isinstance(arg, (discord.abc.Messageable, discord.Role)):
-            data = {f'{self.name}.{param}_id': arg.id}
-
-        elif isinstance(arg, discord.Message):
-            data = {f'{self.name}.{param}_id': f'{arg.channel.id}:{arg.id}'}
+        data = {f'{self.name}.{self._serialize_param(param)}': self._serialize_arg(arg)}
 
         doc = await self._bot.db.guild_config.find_one_and_update(
             {"id": self._guild_id},
@@ -177,20 +235,18 @@ class CogConfig(ABC):
     def from_doc(self, doc: Dict) -> NoReturn:
         doc = doc.get(self.name, {})
         for param, hint in self.type_hints.items():
-            if (inspect.isclass(hint) and issubclass(hint, discord.abc.Messageable)) or hint in [discord.Role, discord.Message]:
-                param_id = f'{param}_id'
-                arg = doc.get(param_id, None)
+            param_id = self._serialize_param(param)
 
-                setattr(self, param_id, arg)
-
+            if hasattr(self, param):
+                default = getattr(self, param)
+            elif typing.get_origin(hint) is list:
+                default = []
             else:
-                if hasattr(self, param):
-                    default = getattr(self, param)
-                else:
-                    default = None
+                default = None
 
-                arg = doc.get(param, default)
-                setattr(self, param, arg)
+            arg = doc.get(param_id, default)
+
+            setattr(self, param_id, arg)
 
 
     def __repr__(self):
