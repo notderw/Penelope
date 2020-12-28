@@ -245,7 +245,7 @@ class Mod(commands.Cog):
 
         # joined a voice channel
         if before.channel is None and after.channel is not None:
-            config = await self.get_guild_config(user.guild.id)
+            config = await self.get_config(user.guild.id)
             if config is None:
                 return
 
@@ -387,7 +387,7 @@ class Mod(commands.Cog):
             upsert = True
         )
 
-        self.get_guild_config.invalidate(self, ctx.guild.id)
+        self.get_config.invalidate(self, ctx.guild.id)
         await ctx.send(f'Raid mode enabled. Broadcasting join messages to {channel.mention}.')
 
     @raid.command(name='off', aliases=['disable', 'disabled'])
@@ -412,7 +412,7 @@ class Mod(commands.Cog):
         )
 
         self._recently_kicked.pop(ctx.guild.id, None)
-        self.get_guild_config.invalidate(self, ctx.guild.id)
+        self.get_config.invalidate(self, ctx.guild.id)
         await ctx.send('Raid mode disabled. No longer broadcasting join messages.')
 
     @raid.command(name='strict')
@@ -449,7 +449,7 @@ class Mod(commands.Cog):
             upsert = True
         )
 
-        self.get_guild_config.invalidate(self, ctx.guild.id)
+        self.get_config.invalidate(self, ctx.guild.id)
         await ctx.send(f'Raid mode enabled strictly. Broadcasting join messages to {channel.mention}.')
 
     async def _basic_cleanup_strategy(self, ctx, search):
@@ -836,7 +836,7 @@ class Mod(commands.Cog):
                 {"$set": {"mention_count": None}},
                 upsert = True
             )
-            self.get_guild_config.invalidate(self, ctx.guild.id)
+            self.get_config.invalidate(self, ctx.guild.id)
             return await ctx.send('Auto-banning members has been disabled.')
 
         if count <= 3:
@@ -852,7 +852,7 @@ class Mod(commands.Cog):
             upsert = True
         )
 
-        self.get_guild_config.invalidate(self, ctx.guild.id)
+        self.get_config.invalidate(self, ctx.guild.id)
         await ctx.send(f'Now auto-banning members that mention more than {count} users.')
 
     @mentionspam.command(name='ignore', aliases=['bypass'])
@@ -876,7 +876,7 @@ class Mod(commands.Cog):
             upsert = True
         )
 
-        self.get_guild_config.invalidate(self, ctx.guild.id)
+        self.get_config.invalidate(self, ctx.guild.id)
         await ctx.send(f'Mentions are now ignored on {", ".join(c.mention for c in channels)}.')
 
     @mentionspam.command(name='unignore', aliases=['protect'])
@@ -896,7 +896,7 @@ class Mod(commands.Cog):
             {"$pullAll": {"safe_mention_channel_ids": [c.id for c in channels]}},
         )
 
-        self.get_guild_config.invalidate(self, ctx.guild.id)
+        self.get_config.invalidate(self, ctx.guild.id)
         await ctx.send('Updated mentionspam ignore list.')
 
     @commands.group(aliases=['purge'])
