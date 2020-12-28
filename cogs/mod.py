@@ -14,8 +14,13 @@ import argparse, shlex
 import typing
 
 
+import unidecode
+
 from .utils.config import CogConfig
 from .utils.logging import CogLogger
+
+RE_NONASCII = re.compile(r"^[^a-zA-Z0-9]*$")
+RE_IMAGE = re.compile(r"/([^/]+\.(?:jpg|gif|png))")
 
 ## Misc utilities
 
@@ -40,6 +45,8 @@ class ModConfig(CogConfig):
     broadcast_channel: discord.TextChannel
     mention_count: int = 0
     safe_mention_channels: List[discord.TextChannel]
+    image_only_channels: List[discord.TextChannel]
+    normalize_names: bool = False
 
     @property
     def check(self):
@@ -167,6 +174,23 @@ class Mod(commands.Cog):
             self.log.info(f'[Raid Mode] Kicked {member} (ID: {member.id}) from server {member.guild} via strict mode.')
             self._recently_kicked[guild.id].add(member.id)
 
+    async def handle_image_only(self, message: discord.Message):
+        config = await self.get_config(message.guild.id)
+        if not message.channel in config.image_only_channels:
+            return
+
+        # if the message has attachments, and all attachments contain an image file
+        # looks gross, fuck it
+        if message.attachments \
+            and len(message.attachments) == len([item for sublist in [RE_IMAGE.findall(a.url) for a in message.attachments] for item in sublist]):
+                return
+
+        # Content is an image link
+        if RE_IMAGE.findall(message.content):
+            return
+
+        await message.delete()
+
     @commands.Cog.listener()
     async def on_message(self, message):
         author = message.author
@@ -176,6 +200,8 @@ class Mod(commands.Cog):
         if message.guild is None:
             return
 
+        await self.handle_image_only(message)
+
         if not isinstance(author, discord.Member):
             return
 
@@ -184,9 +210,7 @@ class Mod(commands.Cog):
             return
 
         guild_id = message.guild.id
-        config = await self.get_guild_config(guild_id)
-        if config is None:
-            return
+        config = await self.get_config(guild_id)
 
         # check for raid mode stuff
         await self.check_raid(config, message.guild, author, message.created_at)
@@ -209,7 +233,7 @@ class Mod(commands.Cog):
         try:
             await author.ban(reason=f'Spamming mentions ({mention_count} mentions)')
         except Exception as e:
-            log.info(f'Failed to autoban member {author} (ID: {author.id}) in guild ID {guild_id}')
+            self.log.info(f'Failed to autoban member {author} (ID: {author.id}) in guild ID {guild_id}')
         else:
             await message.channel.send(f'Banned {author} (ID: {author.id}) for spamming {mention_count} mentions.')
             self.log.info(f'Member {author} (ID: {author.id}) has been autobanned from guild ID {guild_id}')
@@ -228,8 +252,28 @@ class Mod(commands.Cog):
             await self.check_raid(config, user.guild, user, datetime.datetime.utcnow())
 
     @commands.Cog.listener()
+    async def on_member_update(self, before: discord.Member, after: discord.Member):
+        if before.nick != after.nick:
+            await self.normalize_name(after)
+
+    async def normalize_name(self, member: discord.Member):
+        config = await self.get_config(member.guild.id)
+        if not config.normalize_names:
+            return
+
+        # ignore "moderators"
+        if member.guild_permissions.manage_guild:
+            return
+
+        name = member.nick or member.display_name
+        if RE_NONASCII.findall(name):
+            await member.edit(nick=unidecode.unidecode(name))
+
+    @commands.Cog.listener()
     async def on_member_join(self, member):
-        config = await self.get_guild_config(member.guild.id)
+        await self.normalize_name(member)
+
+        config = await self.get_config(member.guild.id)
         if config is None or not config.raid_mode:
             return
 
