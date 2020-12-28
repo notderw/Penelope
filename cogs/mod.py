@@ -2,6 +2,7 @@ from discord.ext import commands
 from .utils import checks, time, cache, formats
 from collections import Counter, defaultdict
 from inspect import cleandoc
+from typing import List
 
 import re
 import json
@@ -10,10 +11,11 @@ import enum
 import datetime
 import asyncio
 import argparse, shlex
-import logging
 import typing
 
-log = logging.getLogger(__name__)
+
+from .utils.config import CogConfig
+from .utils.logging import CogLogger
 
 ## Misc utilities
 
@@ -31,26 +33,17 @@ class RaidMode(enum.Enum):
 
 ## Configuration
 
-class ModConfig:
-    __slots__ = ('raid_mode', 'id', 'bot', 'broadcast_channel_id', 'mention_count', 'safe_mention_channel_ids')
+class ModConfig(CogConfig):
+    name = 'mod'
 
-    @classmethod
-    async def from_record(cls, record, bot):
-        self = cls()
-
-        # the basic configuration
-        self.bot = bot
-        self.id = record['id']
-        self.raid_mode = record.get('raid_mode', False)
-        self.broadcast_channel_id = record.get('broadcast_channel', None)
-        self.mention_count = record.get('mention_count', 0)
-        self.safe_mention_channel_ids = set(record.get('safe_mention_channel_ids', []))
-        return self
+    raid_mode: int = 0
+    broadcast_channel: discord.TextChannel
+    mention_count: int = 0
+    safe_mention_channels: List[discord.TextChannel]
 
     @property
-    def broadcast_channel(self):
-        guild = self.bot.get_guild(self.id)
-        return guild and guild.get_channel(self.broadcast_channel_id)
+    def check(self):
+        return True
 
 ## Converters
 
@@ -104,6 +97,8 @@ class Mod(commands.Cog):
         self.bot = bot
         self.db = bot.mongo.penelope
 
+        self.log = CogLogger('Penelope', self)
+
         # guild_id: set(user_id)
         self._recently_kicked = defaultdict(set)
 
@@ -123,11 +118,14 @@ class Mod(commands.Cog):
                 await ctx.send('Somehow, an unexpected error occurred. Try again later?')
 
     @cache.cache()
-    async def get_guild_config(self, guild_id):
-        record = await self.db.guild_mod_config.find_one({"id": guild_id})
-        if record is not None:
-            return await ModConfig.from_record(record, self.bot)
-        return None
+    async def get_config(self, guild_id) -> ModConfig:
+        return await ModConfig.from_db(guild_id, self.bot)
+
+    @commands.command(aliases=['c'])
+    @checks.is_mod()
+    async def config(self, ctx, *args):
+        config = await self.get_config(ctx.guild.id)
+        await config.handle_command(ctx, *args)
 
     async def check_raid(self, config, guild, member, timestamp):
         if config.raid_mode != RaidMode.strict.value:
@@ -164,9 +162,9 @@ class Mod(commands.Cog):
         try:
             await member.kick(reason='Strict raid mode')
         except discord.HTTPException:
-            log.info(f'[Raid Mode] Failed to kick {member} (ID: {member.id}) from server {member.guild} via strict mode.')
+            self.log.info(f'[Raid Mode] Failed to kick {member} (ID: {member.id}) from server {member.guild} via strict mode.')
         else:
-            log.info(f'[Raid Mode] Kicked {member} (ID: {member.id}) from server {member.guild} via strict mode.')
+            self.log.info(f'[Raid Mode] Kicked {member} (ID: {member.id}) from server {member.guild} via strict mode.')
             self._recently_kicked[guild.id].add(member.id)
 
     @commands.Cog.listener()
@@ -214,7 +212,7 @@ class Mod(commands.Cog):
             log.info(f'Failed to autoban member {author} (ID: {author.id}) in guild ID {guild_id}')
         else:
             await message.channel.send(f'Banned {author} (ID: {author.id}) for spamming {mention_count} mentions.')
-            log.info(f'Member {author} (ID: {author.id}) has been autobanned from guild ID {guild_id}')
+            self.log.info(f'Member {author} (ID: {author.id}) has been autobanned from guild ID {guild_id}')
 
     @commands.Cog.listener()
     async def on_voice_state_update(self, user, before, after):
