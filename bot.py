@@ -1,6 +1,7 @@
 import os, sys
 import asyncio
 import traceback
+import time
 import datetime
 import logging
 import json
@@ -37,6 +38,9 @@ DEVELOPMENT = os.environ.get("DEVELOPMENT")
 
 log = makeLogger('Penelope')
 log.setLevel(logging.INFO)
+
+os.environ['TZ'] = 'UTC'
+time.tzset()
 
 description = """
 Hello human.
