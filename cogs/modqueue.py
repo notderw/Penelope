@@ -1,11 +1,11 @@
-
 import re
 import traceback
 import unicodedata
 
 from enum import Enum
-from typing import List, Optional, Text
-from datetime import datetime
+from typing import List, Optional, Text, Union
+from datetime import datetime, timedelta
+from asyncio import sleep
 
 import discord
 from discord.ext import commands, tasks
@@ -29,7 +29,7 @@ banned = [
     "fudgel" # super secret test word
 ]
 
-re_terms = re.compile("(\w*(" + "|".join(banned) + ")\w*)", re.MULTILINE | re.IGNORECASE)
+RE_TERMS = re.compile("(\w*(" + "|".join(banned) + ")\w*)", re.MULTILINE | re.IGNORECASE)
 
 
 class ModQueueConfig(CogConfig):
@@ -44,64 +44,6 @@ class ModQueueConfig(CogConfig):
         return self.enabled \
             and self.log_channel is not None \
             and self.queue_channel is not None
-
-
-class ModQueueItem(object):
-    __slots__ = ('_bot', 'id', 'type', 'author_id', 'guild_id', 'message', 'matches', 'timestamp', 'action', 'mod_id', 'action_timestamp')
-
-    @classmethod
-    def from_doc(cls, doc, bot: commands.Bot):
-        self = cls()
-        self._bot = bot
-        self.id = doc['id']
-        self.type = ModQueueItem.Type(doc['type'])
-        self.author_id = doc['author_id']
-        self.guild_id = doc['guild_id']
-        self.message = ModQueueItem.Message.from_doc(doc, bot)
-        self.matches = doc['matches']
-        self.timestamp = doc['timestamp']
-
-        self.action = doc.get('action', None)
-        self.mod_id = doc.get('mod_id', None)
-        self.action_timestamp = doc.get('action_timestamp', None)
-
-        return self
-
-    @property
-    def author(self) -> discord.User:
-        return self._bot.get_user(self.author_id)
-
-    @property
-    def guild(self) -> discord.Guild:
-        return self._bot.get_guild(self.guild_id)
-
-    class Type(Enum):
-        MESSAGE = 0
-        NAME    = 1
-
-    class Message:
-        __slots__ = ('_bot', 'id', 'channel_id', 'clean_content')
-        @classmethod
-        def from_doc(cls, doc, bot: commands.Bot):
-            if 'message' not in doc:
-                return None
-
-            message = doc['message']
-
-            self = cls()
-            self._bot = bot
-            self.id = message['id']
-            self.channel_id = message['channel_id']
-            self.clean_content = message['clean_content']
-            return self
-
-        @property
-        def channel(self):
-            return self._bot.get_channel(self.channel_id)
-
-        async def delete(self):
-            m = await self.channel.fetch_message(self.id)
-            await m.delete()
 
 
 EMOJI_MAP = {
@@ -144,6 +86,232 @@ class Action(Enum):
             print(f'ModQueue:Action - Failed to decode emoji "{emoji.name}"')
             return None
 
+
+class ModQueueItem(object):
+    __slots__ = ('_bot', '_collection', 'id', 'type', 'author_id', 'guild_id', 'message', 'matches', 'timestamp', 'edits', 'action', 'mod_id', 'action_timestamp', 'deleted_at', 'deleted_by_id')
+
+    @classmethod
+    def from_doc(cls, doc, bot: commands.Bot, collection):
+        self = cls()
+        self._bot = bot
+        self._collection = collection
+        self._from_doc(doc)
+
+        return self
+
+    def _from_doc(self, doc):
+        self.id = doc.get('id')
+        self.type = ModQueueItem.Type(doc['type'])
+        self.author_id = doc['author_id']
+        self.guild_id = doc['guild_id']
+        self.message = ModQueueItem.Message.from_doc(doc, self._bot)
+        self.matches = doc['matches']
+        self.timestamp = doc['timestamp']
+
+        self.deleted_at = doc.get('deleted_at', False)
+        self.deleted_by_id = doc.get('deleted_by_id', None)
+
+        self.edits = None
+        if 'edits' in doc:
+            self.edits = [ModQueueItem.Edit.from_doc(d) for d in doc['edits']]
+
+        self.action = None
+        if 'action' in doc:
+            self.action = Action(doc['action'])
+
+        self.mod_id = doc.get('mod_id', None)
+        self.action_timestamp = doc.get('action_timestamp', None)
+
+    @property
+    def author(self) -> discord.User:
+        return self._bot.get_user(self.author_id)
+
+    @property
+    def guild(self) -> discord.Guild:
+        return self._bot.get_guild(self.guild_id)
+
+    @property
+    def deleted_by(self) -> discord.User:
+        return self._bot.get_user(self.deleted_by_id)
+
+    @staticmethod
+    def check(message):
+        return RE_TERMS.findall(message.clean_content.strip())
+
+    async def embed(self) -> discord.Embed:
+        e = discord.Embed(color=self.action.color if self.action else 0xF44336)
+        e.description = ''
+        e.description += f'{self.author.mention} '
+
+        if not self.deleted_at and not self.action or self.action is Action.IGNORE:
+            e.description += f'[Jump to message](https://discordapp.com/channels/{self.guild.id}/{self.message.channel.id}/{self.message.id})'
+
+        e.description += '\n\n'
+
+        if self.deleted_at:
+            td = self.deleted_at - self.timestamp
+            e.description += f'***MESSAGE WAS DELETED*** *({td.seconds/60:.0f} minutes)* '
+
+            if self.deleted_by:
+                e.description += f'*(by {self.deleted_by.mention})*'
+
+            e.description += '\n\n'
+
+        if self.edits:
+            for i, edit in enumerate(reversed(self.edits)):
+                td = edit.timestamp - self.timestamp
+                e.description += f'**__Edit {len(self.edits) - i}__** '
+
+                e.description += '*('
+                if td.days:
+                    e.description += f'{td.days} days '
+
+                e.description += f'{td.seconds/60:.0f} minutes'
+                e.description += ')*\n'
+
+                e.description += f'Flags: '
+                matches = RE_TERMS.findall(edit.clean_content)
+                if matches:
+                    e.description += ", ".join(f'`{match[0]}`' for match in matches)
+                else:
+                    e.description += "None"
+
+                e.description += f'\n'
+                e.description += f'```{edit.clean_content}```'
+
+                e.description += '\n'
+
+            e.description += '**__Original__**\n'
+
+
+        e.description += f'Flags: '
+        e.description += ", ".join(f'`{match[0]}`' for match in self.matches)
+
+        e.description += '\n'
+        e.description += f'```{self.message.clean_content}```'
+
+        strikes: List[ModQueueItem] = []
+        async for doc in self._collection.find({"guild_id": self.guild.id, "author_id": self.author.id, "action": Action.STRIKE.value}):
+            item = ModQueueItem.from_doc(doc, self._bot, self._collection)
+            if item.id == self.id:
+                pass
+
+            strikes.append(item)
+
+        if strikes:
+            e.description += f'\n**Previous Strikes ({len(strikes)})**\n'
+            for i, strike in enumerate(strikes):
+                e.description += f'{i+1}. ' + ' '.join(f'`{m[1]}` -' for m in strike.matches) + f' {strike.action_timestamp.strftime("%d %b %Y")}\n'
+
+        e.timestamp = datetime.now()
+        e.set_author(name=f'{self.author.name}#{self.author.discriminator}', icon_url=self.author.avatar_url)
+
+        return e
+
+    async def refresh_embed(self, message: discord.Message):
+        embed = await self.embed()
+        await message.edit(embed=embed)
+
+    async def submit_action(self, action, mod):
+        doc = await self._collection.find_one_and_update(
+            {'id': self.id},
+            {'$set': {
+                'action': action.value,
+                'mod_id': mod.id,
+                'action_timestamp': datetime.utcnow()
+            }},
+            return_document=ReturnDocument.AFTER
+        )
+
+        self._from_doc(doc)
+
+    async def add_edit(self, message: discord.Message):
+        doc = await self._collection.find_one_and_update(
+            {'id': self.id},
+            {'$push': {
+                'edits': {
+                    'clean_content': message.clean_content,
+                    'timestamp': message.edited_at
+                }
+            }},
+            return_document=ReturnDocument.AFTER
+        )
+
+        self._from_doc(doc)
+
+    async def set_deleted(self, deleted_by: Union[discord.User, None]):
+        data = {
+            'deleted_at': datetime.utcnow()
+        }
+
+        if deleted_by:
+            data['deleted_by_id'] = deleted_by.id
+
+        doc = await self._collection.find_one_and_update(
+            {'id': self.id},
+            {'$set': data },
+            return_document=ReturnDocument.AFTER
+        )
+
+        self._from_doc(doc)
+
+
+    class Type(Enum):
+        MESSAGE = 0
+        NAME    = 1
+
+    class Message:
+        __slots__ = ('_bot', 'id', 'channel_id', 'clean_content')
+        @classmethod
+        def from_doc(cls, doc, bot: commands.Bot):
+            if 'message' not in doc:
+                return None
+
+            message = doc['message']
+
+            self = cls()
+            self._bot = bot
+            self.id = message['id']
+            self.channel_id = message['channel_id']
+            self.clean_content = message['clean_content']
+            return self
+
+        @property
+        def channel(self):
+            return self._bot.get_channel(self.channel_id)
+
+        async def delete(self):
+            m = await self.channel.fetch_message(self.id)
+            await m.delete()
+
+    class Edit:
+        __slots__ = ('timestamp', 'clean_content')
+        @classmethod
+        def from_doc(cls, doc):
+            self = cls()
+            self.clean_content = doc['clean_content']
+            self.timestamp = doc['timestamp']
+            return self
+
+
+class ModQueueWrapper:
+    def __init__(self, bot, collection):
+        self._bot = bot
+        self._collection = collection
+
+    async def make(self, doc) -> ModQueueItem:
+        return ModQueueItem.from_doc(doc, self._bot, self._collection)
+
+    async def add(self, data):
+        await self._collection.insert_one(data)
+
+    async def find(self, **kwargs) -> Union[ModQueueItem, None]:
+        doc = await self._collection.find_one(kwargs)
+        if not doc:
+            return None
+        return await self.make(doc)
+
+
 class ModQueue(commands.Cog):
     """ModQueue for flagged words"""
 
@@ -153,7 +321,9 @@ class ModQueue(commands.Cog):
 
         self.log = CogLogger('Penelope', self)
 
-        self.log.debug(re_terms.pattern)
+        self.log.debug(RE_TERMS.pattern)
+
+        self.queue = ModQueueWrapper(self.bot, self.collection)
 
     @cache.cache()
     async def get_config(self, guild_id) -> ModQueueConfig:
@@ -198,11 +368,9 @@ class ModQueue(commands.Cog):
         if mod.bot:
             return
 
-        doc = await self.collection.find_one({'id': payload.message_id})
-        if not doc:
+        item = await self.queue.find(id=payload.message_id)
+        if not item:
             return
-
-        item = ModQueueItem.from_doc(doc, self.bot)
 
         try:
             if action is Action.BAN:
@@ -222,34 +390,67 @@ class ModQueue(commands.Cog):
             await config.log_channel.send(f'Unhandled exception handling action {action.name.lower()} on `{item.author.name}#{item.author.discriminator}`, {e}')
 
         finally:
-            await self.collection.find_one_and_update(
-                {'id': item.id},
-                {'$set': {
-                    'action': action.value,
-                    'mod_id': mod.id,
-                    'action_timestamp': datetime.utcnow()
-                }}
-            )
+            await item.submit_action(action, mod)
 
-            e = discord.Embed(color=action.color)
-            e.description = ''
-            e.description += f'{item.author.mention}\n'
-
-            e.description += '**Detected:**\n'
-            for i, m in enumerate(item.matches):
-                e.description += f'{i+1}. `{m[1]}` in "{m[0]}"\n'
-
-            e.description += '\n'
-            e.description += f'**In message:**```{item.message.clean_content}```'
-
-            e.timestamp = datetime.now()
-            e.set_author(name=f'{item.author.name}#{item.author.discriminator}', icon_url=item.author.avatar_url)
-
+            e = await item.embed()
             await config.log_channel.send(f'Action submitted: {action.name.lower()} by `{mod.name}#{mod.discriminator}`', embed=e)
 
             m = await config.queue_channel.fetch_message(item.id)
             await m.delete()
 
+    @commands.Cog.listener()
+    async def on_raw_message_edit(self, payload):
+        channel = self.bot.get_channel(payload.channel_id)
+
+        if channel.guild is None:
+            return
+
+        config = await self.get_config(channel.guild.id)
+        if not config.check:
+            return
+
+        item = await self.queue.find(**{'message.id': payload.message_id})
+        if not item:
+            return
+
+        message = await channel.fetch_message(payload.message_id)
+        if not message.edited_at:
+            return
+
+        await item.add_edit(message)
+
+        message = await config.queue_channel.fetch_message(item.id)
+        await item.refresh_embed(message)
+
+    @commands.Cog.listener()
+    async def on_raw_message_delete(self, payload):
+        if payload.guild_id is None:
+            return
+
+        config = await self.get_config(payload.guild_id)
+        if not config.check:
+            return
+
+        item = await self.queue.find(**{'message.id': payload.message_id})
+        if not item:
+            return
+
+        await sleep(1) # allow the audit logs to catch up
+
+        deleted_by = None
+        guild = self.bot.get_guild(payload.guild_id)
+        after = datetime.utcnow() - timedelta(seconds=10)
+        async for entry in guild.audit_logs(action=discord.AuditLogAction.message_delete, limit=10): # this is shit but it should work most of the time
+            if not entry.created_at > after:
+                break
+            if entry.target.id == item.author.id and entry.extra.channel.id == item.message.channel.id:
+                deleted_by = entry.user
+                break
+
+        await item.set_deleted(deleted_by)
+
+        message = await config.queue_channel.fetch_message(item.id)
+        await item.refresh_embed(message)
 
     @commands.Cog.listener()
     async def on_message(self, message):
@@ -263,41 +464,11 @@ class ModQueue(commands.Cog):
         if not config.check:
             return
 
-        matches = re_terms.findall(message.clean_content.strip())
-
+        matches = ModQueueItem.check(message)
         if not matches:
             return
 
-        e = discord.Embed(color=0xF44336)
-        e.description = ''
-        e.description += f'{message.author.mention} [Jump to message](https://discordapp.com/channels/{message.guild.id}/{message.channel.id}/{message.id})\n'
-
-        e.description += '**Detected:**\n'
-        for i, m in enumerate(matches):
-            e.description += f'{i+1}. `{m[1]}` in "{m[0]}"\n'
-
-        e.description += '\n'
-        e.description += f'**In message:**```{message.clean_content}```'
-
-        strikes: List[ModQueueItem] = []
-        async for doc in self.collection.find({"guild_id": message.guild.id, "author_id": message.author.id, "action": Action.STRIKE.value}):
-            strikes.append(ModQueueItem.from_doc(doc, self.bot))
-
-        if strikes:
-            e.description += f'\n**Previous Strikes ({len(strikes)})**\n'
-            for i, strike in enumerate(strikes):
-                e.description += f'{i+1}. ' + ' '.join(f'`{m[1]}` in "{m[0]}"' for m in strike.matches) + f' {strike.action_timestamp.strftime("%b %d %Y")}\n'
-
-        e.timestamp = datetime.now()
-        e.set_author(name=f'{message.author.name}#{message.author.discriminator}', icon_url=message.author.avatar_url)
-
-        msg = await config.queue_channel.send("Naughty words detected", embed=e)
-
-        for action in [Action.BAN, Action.STRIKE, Action.IGNORE]:
-            await msg.add_reaction(action.emoji)
-
-        await self.collection.insert_one({
-            "id": msg.id,
+        data = {
             "type": ModQueueItem.Type.MESSAGE.value,
             "author_id": message.author.id,
             "guild_id": message.guild.id,
@@ -307,8 +478,20 @@ class ModQueue(commands.Cog):
                 "clean_content": message.clean_content
             },
             "matches": matches,
-            "timestamp": datetime.utcnow()
-        })
+            "timestamp": message.created_at
+        }
+
+        item = await self.queue.make(data)
+        e = await item.embed()
+
+        msg = await config.queue_channel.send("Naughty words detected", embed=e)
+
+        for action in [Action.BAN, Action.STRIKE, Action.IGNORE]:
+            await msg.add_reaction(action.emoji)
+
+        data['id'] = msg.id
+
+        await self.queue.add(data)
 
     @commands.Cog.listener()
     async def on_member_join(self, member):
@@ -330,7 +513,7 @@ class ModQueue(commands.Cog):
             if not text:
                 continue
 
-            matches = re_terms.findall(text)
+            matches = RE_TERMS.findall(text)
 
             if matches:
                 e = discord.Embed(color=0xF44336)
